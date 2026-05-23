@@ -71,6 +71,14 @@ export interface Translations {
   romanNavStory: string;
   romanNavRsvp: string;
   stickyRsvpBtn: string;
+  // Dress Code additions
+  dressCodeSectionNum: string;
+  dressCodeTitle: string;
+  dressCodeStyleLabel: string;
+  dressCodeStyleDesc: string;
+  dressCodeGuidelinesLabel: string;
+  dressCodeGuidelinesDesc: string;
+  dressCodeColorsLabel: string;
 }
 
 export const translations: Record<'ENG' | 'VIE', Translations> = {
@@ -146,7 +154,15 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     romanNavDetails: "THE DETAILS",
     romanNavStory: "OUR STORY",
     romanNavRsvp: "RSVP",
-    stickyRsvpBtn: "RSVP"
+    stickyRsvpBtn: "RSVP",
+    // Dress Code ENG
+    dressCodeSectionNum: "04 // Suggested Dress Code",
+    dressCodeTitle: "Dress Code & Attire",
+    dressCodeStyleLabel: "Attire Style",
+    dressCodeStyleDesc: "Formal / Semi-Formal (Earth-toned palette preferred)",
+    dressCodeGuidelinesLabel: "Dress Code Guidelines",
+    dressCodeGuidelinesDesc: "To complement our natural forest setting, we kindly invite you to wear warm earth tones or soft forest greens. We politely request that guests avoid wearing pure white or pure black to let the natural scenery and wedding couple stand out.",
+    dressCodeColorsLabel: "Our Color Palette"
   },
   VIE: {
     weddingName: "Gia Bảo & John",
@@ -220,6 +236,14 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     romanNavDetails: "CHI TIẾT LỄ",
     romanNavStory: "CÂU CHUYỆN",
     romanNavRsvp: "XÁC NHẬN",
-    stickyRsvpBtn: "XÁC NHẬN"
+    stickyRsvpBtn: "XÁC NHẬN",
+    // Dress Code VIE
+    dressCodeSectionNum: "04 // Gợi Ý Trang Phục",
+    dressCodeTitle: "Trang Phục Dự Lễ",
+    dressCodeStyleLabel: "Phong Cách Trang Phục",
+    dressCodeStyleDesc: "Trang trọng / Bán trang trọng (Ưu tiên các tông màu đất trầm ấm)",
+    dressCodeGuidelinesLabel: "Lưu Ý Về Trang Phục",
+    dressCodeGuidelinesDesc: "Để hòa hợp tuyệt vời cùng thiên nhiên hoang sơ của rừng thông, kính mời quý khách mặc những tông màu đất ấm áp hoặc xanh rừng mềm mại. Mong quý khách vui lòng tránh diện các bộ đồ có sắc trắng tinh hoặc đen tuyền nguyên khối.",
+    dressCodeColorsLabel: "Tông Màu Gợi Ý"
   }
 };

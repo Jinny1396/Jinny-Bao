@@ -142,14 +142,28 @@ export default function App() {
 
   const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [paletteColors, setPaletteColors] = useState<string[]>([
+    '#DECCA6', // Sand/Gold
+    '#C0A080', // Taupe/Beige
+    '#8A9A86', // Sage Green
+    '#5E6B5C', // Forest Green
+    '#3D3B36'  // Earth Dark
+  ]);
   const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
 
   // States for CMS Panel in Admin view
   const [adminTab, setAdminTab] = useState<'rsvps' | 'cms'>('rsvps');
   const [cmsLang, setCmsLang] = useState<'ENG' | 'VIE'>('ENG');
-  const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils'>('hero');
+  const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [cmsPaletteColors, setCmsPaletteColors] = useState<string[]>([
+    '#DECCA6',
+    '#C0A080',
+    '#8A9A86',
+    '#5E6B5C',
+    '#3D3B36'
+  ]);
 
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -182,6 +196,14 @@ export default function App() {
           if (data.imageUrl) {
             setHeroImageUrl(data.imageUrl);
             setCmsImageUrl(data.imageUrl);
+          }
+
+          if (data.paletteColors && Array.isArray(data.paletteColors)) {
+            const loadedColors = [...data.paletteColors];
+            while (loadedColors.length < 5) loadedColors.push('#CCCCCC');
+            const finalColors = loadedColors.slice(0, 5);
+            setPaletteColors(finalColors);
+            setCmsPaletteColors(finalColors);
           }
         }
       } catch (err) {
@@ -392,12 +414,14 @@ export default function App() {
         ENG: cmsTranslations.ENG,
         VIE: cmsTranslations.VIE,
         imageUrl: cmsImageUrl,
+        paletteColors: cmsPaletteColors,
         updatedAt: new Date().toISOString(),
       });
 
       // Update active live states of the landing page
       setSiteContent(cmsTranslations);
       setHeroImageUrl(cmsImageUrl);
+      setPaletteColors(cmsPaletteColors);
 
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 4000);
@@ -1365,6 +1389,7 @@ export default function App() {
                     <option value="details">Part II // Grounds Location &amp; Venue Schedules</option>
                     <option value="map">Part III // Watercolor Sketch Map Labels</option>
                     <option value="story">Part IV // Path Taken (Historical Milestones)</option>
+                    <option value="dresscode">Part VIII // Suggested Dress Code &amp; Color Scheme Palette</option>
                     <option value="rsvp">Part V // Union registry RSVP Form Elements</option>
                     <option value="thankyou">Part VI // Attendance Confirmation Toast Screens</option>
                     <option value="utils">Part VII // Footer &amp; System Navigation Elements</option>
@@ -1482,6 +1507,65 @@ export default function App() {
                       {renderTextInput("Stickies CTA: Floating banner RSVP button text", "stickyRsvpBtn")}
                       {renderTextInput("Footer general copyrights notes description", "footerUnionText")}
                       {renderTextInput("Footer guest registry link tag text outline", "footerRegistryLedger")}
+                    </>
+                  )}
+
+                  {cmsSection === 'dresscode' && (
+                    <>
+                      {renderTextInput("Dress Code Chapter Flag (e.g. 04 // Suggested Dress Code)", "dressCodeSectionNum")}
+                      {renderTextInput("Dress Code Title", "dressCodeTitle")}
+                      {renderTextInput("Attire Style Label", "dressCodeStyleLabel")}
+                      {renderTextInput("Attire Style Short Description", "dressCodeStyleDesc")}
+                      {renderTextInput("Guidelines Header Label", "dressCodeGuidelinesLabel")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Detailed Guidelines Explanation Description", "dressCodeGuidelinesDesc")}</div>
+                      {renderTextInput("Suggested Wedding Palette Label", "dressCodeColorsLabel")}
+
+                      {/* Color Palette customization sub-section */}
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-6 mt-4">
+                        <span className="font-sans text-[10px] tracking-[0.2em] font-semibold text-earth-accent uppercase block mb-1">
+                          III. Interactive Wedding Color Swatches
+                        </span>
+                        <p className="font-serif text-[11px] text-[#6E6A5F] italic mb-4">
+                          Change color hex values or click on swatches to select standard colors for the live color palette.
+                        </p>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                          {cmsPaletteColors.map((hex, idx) => (
+                            <div key={idx} className="bg-white p-3 rounded-xl border border-earth-dark/10 shadow-xs flex flex-col gap-2">
+                              {/* Swatch colorpicker label */}
+                              <span className="font-sans text-[9px] text-[#8B8373] tracking-wider uppercase font-semibold">
+                                Color {idx + 1}
+                              </span>
+                              
+                              <div className="flex items-center gap-2">
+                                {/* Color pick input element */}
+                                <input
+                                  type="color"
+                                  value={hex}
+                                  onChange={(e) => {
+                                    const nextColors = [...cmsPaletteColors];
+                                    nextColors[idx] = e.target.value.toUpperCase();
+                                    setCmsPaletteColors(nextColors);
+                                  }}
+                                  className="w-8 h-8 rounded-lg overflow-hidden border border-black/5 cursor-pointer shrink-0"
+                                />
+                                
+                                <input
+                                  type="text"
+                                  value={hex}
+                                  maxLength={7}
+                                  onChange={(e) => {
+                                    const nextColors = [...cmsPaletteColors];
+                                    nextColors[idx] = e.target.value.toUpperCase();
+                                    setCmsPaletteColors(nextColors);
+                                  }}
+                                  className="w-full text-xs font-mono py-1 px-1.5 border border-earth-dark/15 rounded-md text-earth-dark uppercase text-center"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
@@ -1947,6 +2031,77 @@ export default function App() {
                   <p className="font-serif text-base text-neutral-600 font-light leading-relaxed select-text">
                     {t.story2026Desc}
                   </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        {/* SEC III.V: DRESS CODE & PALETTE */}
+        <section 
+          id="dresscode" 
+          className="py-24 border-t border-earth-dark/5 scroll-mt-12 relative text-left"
+        >
+          <div className="absolute top-10 right-4 lg:right-20 opacity-30 select-none pointer-events-none">
+            <MinimalRoseDetail />
+          </div>
+
+          <div className="max-w-3xl">
+            <span className="font-serif text-sm italic text-olive-light font-light mb-6 block">
+              {t.dressCodeSectionNum}
+            </span>
+            <h2 className="text-4xl md:text-5xl font-serif font-light tracking-tight mb-12 leading-tight">
+              {t.dressCodeTitle}
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-start">
+              {/* Left Details block: 7 cols */}
+              <div className="md:col-span-7 flex flex-col gap-8">
+                {/* Attire style */}
+                <div>
+                  <h4 className="font-sans text-[10px] tracking-[0.25em] font-semibold text-earth-accent uppercase mb-2">
+                    {t.dressCodeStyleLabel}
+                  </h4>
+                  <p className="font-serif text-xl font-light text-[#5E5B52]">
+                    {t.dressCodeStyleDesc}
+                  </p>
+                </div>
+
+                {/* Guidelines description */}
+                <div>
+                  <h4 className="font-sans text-[10px] tracking-[0.25em] font-semibold text-earth-accent uppercase mb-2">
+                    {t.dressCodeGuidelinesLabel}
+                  </h4>
+                  <p className="font-serif text-base text-neutral-600 font-light leading-relaxed select-text">
+                    {t.dressCodeGuidelinesDesc}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Palette circle list: 5 cols */}
+              <div className="md:col-span-5 bg-[#FAF8F5]/80 border border-earth-dark/5 rounded-2xl p-6 shadow-[0_8px_30px_rgba(0,0,0,0.01)] text-center">
+                <h4 className="font-sans text-[10px] tracking-[0.25em] font-semibold text-[#8B8373] uppercase mb-6">
+                  {t.dressCodeColorsLabel}
+                </h4>
+                
+                {/* 5-circle swatch flex */}
+                <div className="flex justify-center items-center gap-3.5 sm:gap-4 py-2 flex-wrap">
+                  {paletteColors.map((hex, index) => (
+                    <div key={index} className="flex flex-col items-center gap-1.5 min-w-[55px]">
+                      <div 
+                        className="w-11 h-11 rounded-full border border-black/5 shadow-inner transition-transform duration-300 hover:scale-110 relative group cursor-pointer"
+                        style={{ backgroundColor: hex }}
+                        title={hex}
+                      >
+                        {/* Tooltip on hover showing hex code */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-0.5 bg-earth-dark text-white rounded text-[9px] font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap shadow-md">
+                          {hex}
+                        </div>
+                      </div>
+                      <span className="font-mono text-[9px] text-[#A29A88] select-all">{hex}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
