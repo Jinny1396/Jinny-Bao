@@ -10,7 +10,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Initialize Firestore with specific Database ID (critical for compilation and multi-database capability)
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, 'ai-studio-e7e5670b-569f-45ab-85a1-e55b971f2c28');
 
 /**
  * Operation types for tracking failures
