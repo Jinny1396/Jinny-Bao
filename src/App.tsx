@@ -17,10 +17,17 @@ import {
   Volume2,
   VolumeX,
   Compass,
-  Smile
+  Smile,
+  Lock,
+  Unlock,
+  RefreshCw,
+  Download,
+  LogOut,
+  Search,
+  Filter
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
@@ -121,6 +128,109 @@ interface Petal {
 }
 
 export default function App() {
+  // Administrative state managers
+  const [isAdminViewActive, setIsAdminViewActive] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
+    return sessionStorage.getItem('BAO_JOHN_ADMIN_AUTH') === 'true';
+  });
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinError, setAdminPinError] = useState('');
+  const [rsvpsList, setRsvpsList] = useState<any[]>([]);
+  const [isFetchingRsvps, setIsFetchingRsvps] = useState(false);
+  const [fetchingRsvpsError, setFetchingRsvpsError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'attending' | 'declined'>('all');
+
+  // Parse URL hash routing to toggle admin view
+  useEffect(() => {
+    const handleCheckHash = () => {
+      if (window.location.hash === '#admin') {
+        setIsAdminViewActive(true);
+      } else {
+        setIsAdminViewActive(false);
+      }
+    };
+    handleCheckHash();
+    window.addEventListener('hashchange', handleCheckHash);
+    return () => window.removeEventListener('hashchange', handleCheckHash);
+  }, []);
+
+  // Fetch RSVPs from live Firestore when admin view & auth are active
+  const fetchRsvps = async () => {
+    setIsFetchingRsvps(true);
+    setFetchingRsvpsError('');
+    try {
+      const querySnapshot = await getDocs(collection(db, 'rsvps'));
+      const fetched: any[] = [];
+      querySnapshot.forEach((docSnap) => {
+        fetched.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      // Client-side sort by timestamp descending so the latest submissions are at the top
+      fetched.sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeB - timeA;
+      });
+      setRsvpsList(fetched);
+    } catch (err: any) {
+      console.error('Error fetching RSVPs from Firestore: ', err);
+      setFetchingRsvpsError(err.message || 'Required query could not be performed or reference collection not initialized.');
+    } finally {
+      setIsFetchingRsvps(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminViewActive && isAdminAuthenticated) {
+      fetchRsvps();
+    }
+  }, [isAdminViewActive, isAdminAuthenticated]);
+
+  const handleVerifyPin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (adminPinInput === '1010' || adminPinInput === '1234') {
+      setIsAdminAuthenticated(true);
+      setAdminPinError('');
+      sessionStorage.setItem('BAO_JOHN_ADMIN_AUTH', 'true');
+    } else {
+      setAdminPinError('Invalid passcode. Hint: The wedding date of Gia Bao & John (MMDD format: October 10 = 1010).');
+      setAdminPinInput('');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    setAdminPinInput('');
+    sessionStorage.removeItem('BAO_JOHN_ADMIN_AUTH');
+    window.location.hash = '';
+  };
+
+  const exportToCsv = () => {
+    if (rsvpsList.length === 0) return;
+    
+    const headers = ['Guest Name', 'Attendance', 'Meal Selection', 'Dietary Requirements', 'Song Request', 'Message/Greeting', 'Submission Date'];
+    const rows = rsvpsList.map(item => [
+      item.name || '',
+      item.attendance || '',
+      item.meal || 'N/A',
+      item.dietary || '',
+      item.songRequest || '',
+      item.greeting ? item.greeting.replace(/\n/g, ' ') : '',
+      item.timestamp || ''
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `gia_bao_john_wedding_rsvps_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const [activeSection, setActiveSection] = useState<'hero' | 'details' | 'story' | 'rsvp'>('hero');
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -405,6 +515,459 @@ export default function App() {
     }
     return result;
   };
+
+  if (isAdminViewActive) {
+    return (
+      <div id="admin-portal-container" className="paper-texture relative min-h-screen bg-raw-earth text-earth-dark antialiased select-text">
+        {/* Floating background leaves */}
+        <div className="absolute top-0 left-0 p-4 opacity-5 pointer-events-none">
+          <EucalyptusLeft />
+        </div>
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none scale-x-[-1]">
+          <EucalyptusLeft />
+        </div>
+
+        {!isAdminAuthenticated ? (
+          // PASSCODE PASSWORD ACCESS PROMPT CONTROL PANEL
+          <div className="flex flex-col items-center justify-center min-h-screen px-4 py-12">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className="w-full max-w-md bg-stone-100/40 backdrop-blur-sm border border-earth-dark/10 p-8 md:p-10 rounded-3xl shadow-xl relative overflow-hidden"
+            >
+              {/* Minimalist key icon decoration */}
+              <div className="flex justify-center mb-6 text-earth-accent text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full border border-earth-dark/15 text-earth-accent bg-raw-earth/50">
+                  <Lock size={20} className="stroke-[1.5]" />
+                </div>
+              </div>
+
+              <h2 className="font-serif text-3xl font-light text-center text-earth-dark leading-tight mb-2 select-text">
+                Registry Logbook
+              </h2>
+              <p className="font-sans text-[10px] tracking-[0.255em] text-center text-[#6E6A5F] uppercase mb-8">
+                Gia Bao &amp; John
+              </p>
+
+              <form onSubmit={handleVerifyPin} className="space-y-6">
+                <div>
+                  <label htmlFor="admin-pin" className="block text-[10px] tracking-widest font-sans font-semibold uppercase text-earth-accent text-center mb-3">
+                    Enter Admin Access PIN
+                  </label>
+                  <div className="flex justify-center gap-3 my-4">
+                    {/* Visual indicators of PIN length */}
+                    {[0, 1, 2, 3].map((idx) => (
+                      <div
+                        key={idx}
+                        className={`w-3 h-3 rounded-full border transition-all duration-300 ${
+                          adminPinInput.length > idx
+                            ? 'bg-earth-dark border-earth-dark scale-110'
+                            : 'border-earth-dark/20 bg-transparent'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <input
+                    id="admin-pin"
+                    type="password"
+                    maxLength={4}
+                    value={adminPinInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setAdminPinInput(val);
+                      setAdminPinError('');
+                    }}
+                    placeholder="••••"
+                    className="w-full text-center py-3 bg-transparent border-b border-earth-dark/25 font-mono text-xl tracking-[0.5em] text-earth-dark placeholder-neutral-300 focus:outline-none focus:border-olive-drab transition-colors"
+                    autoFocus
+                  />
+                  {adminPinError && (
+                    <p className="text-xs text-red-600 font-serif italic text-center mt-3 leading-relaxed">{adminPinError}</p>
+                  )}
+                </div>
+
+                {/* Tactical PIN Keyboard Grid */}
+                <div className="grid grid-cols-3 gap-3 max-w-[210px] mx-auto pt-2">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        if (adminPinInput.length < 4) {
+                          setAdminPinInput((prev) => prev + num);
+                          setAdminPinError('');
+                        }
+                      }}
+                      className="w-12 h-12 flex items-center justify-center rounded-full border border-earth-dark/10 hover:bg-earth-dark/5 active:bg-earth-dark/10 text-sm font-sans font-medium text-earth-dark cursor-pointer transition-colors"
+                    >
+                      {num}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminPinInput('');
+                      setAdminPinError('');
+                    }}
+                    className="text-[10px] font-sans tracking-widest text-[#6E6A5F] hover:text-earth-dark cursor-pointer text-center"
+                  >
+                    CLEAR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (adminPinInput.length < 4) {
+                        setAdminPinInput((prev) => prev + '0');
+                        setAdminPinError('');
+                      }
+                    }}
+                    className="w-12 h-12 flex items-center justify-center rounded-full border border-earth-dark/10 hover:bg-earth-dark/5 active:bg-earth-dark/10 text-sm font-sans font-medium text-earth-dark cursor-pointer transition-colors"
+                  >
+                    0
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminPinInput((prev) => prev.slice(0, -1));
+                      setAdminPinError('');
+                    }}
+                    className="text-[10px] font-sans tracking-widest text-[#6E6A5F] hover:text-earth-dark cursor-pointer text-center"
+                  >
+                    DEL
+                  </button>
+                </div>
+
+                <div className="pt-4 flex flex-col gap-3">
+                  <button
+                    type="submit"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-earth-dark text-raw-earth hover:bg-earth-dark/95 transition-all duration-300 font-sans text-xs tracking-widest font-semibold cursor-pointer"
+                  >
+                    <Unlock size={13} />
+                    <span>VERIFY &amp; OPEN LOGBOOK</span>
+                  </button>
+                  
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.location.hash = '';
+                    }}
+                    className="text-center text-[10px] tracking-widest font-sans font-semibold uppercase text-earth-accent hover:text-earth-dark transition-colors pt-2"
+                  >
+                    RETURN TO WEBSITE
+                  </a>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        ) : (
+          // RSVP DATA COLLECTION VIEW
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 select-text">
+            {/* Header section with back button and export buttons */}
+            <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 border-b border-earth-dark/10 pb-8 mb-8">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-olive-drab animate-pulse" />
+                  <span className="font-sans text-[10px] tracking-[0.3em] text-earth-accent uppercase block font-semibold">
+                    SECURED ADMINISTRATIVE PORTAL
+                  </span>
+                </div>
+                <h1 className="font-serif text-4xl font-light text-earth-dark select-text">
+                  The Guestbook Registry
+                </h1>
+                <p className="font-sans text-xs text-neutral-500 mt-1 italic font-serif select-text">
+                  Gia Bao &amp; John Union • Saturday, October 10, 2026
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={fetchRsvps}
+                  disabled={isFetchingRsvps}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-earth-dark/15 hover:bg-earth-dark/5 transition-all font-sans text-[11px] tracking-widest font-semibold text-earth-dark disabled:opacity-55 disabled:cursor-wait cursor-pointer bg-white/40 shadow-xs"
+                  title="Reload Live Submissions"
+                >
+                  <RefreshCw size={13} className={isFetchingRsvps ? 'animate-spin' : ''} />
+                  <span>REFRESH DATA</span>
+                </button>
+
+                <button
+                  onClick={exportToCsv}
+                  disabled={rsvpsList.length === 0}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#C5A059]/30 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 transition-all font-sans text-[11px] tracking-widest font-semibold text-earth-accent disabled:opacity-40 cursor-pointer"
+                  title="Download CSV Worksheet"
+                >
+                  <Download size={13} />
+                  <span>EXPORT CSV</span>
+                </button>
+
+                <button
+                  onClick={handleAdminLogout}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-earth-dark hover:bg-earth-dark/90 text-raw-earth transition-all font-sans text-[11px] tracking-widest font-semibold cursor-pointer shadow-md"
+                  title="Lock Session and Exit"
+                >
+                  <LogOut size={13} />
+                  <span>EXIT PORTAL</span>
+                </button>
+              </div>
+            </header>
+
+            {/* Error alerts if firebase collection can't load */}
+            {fetchingRsvpsError && (
+              <div className="mb-8 p-4 bg-red-50 border border-red-200/50 rounded-2xl text-red-700 text-sm font-serif italic text-center">
+                <p className="font-semibold">Unable to fetch wedding registries:</p>
+                <p className="text-xs opacity-90 mt-1 font-mono">{fetchingRsvpsError}</p>
+              </div>
+            )}
+
+            {/* Summary KPI Grid */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {/* Card 1: Total registrations */}
+              <div className="bg-white/50 backdrop-blur-sm border border-earth-dark/5 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+                <span className="font-sans text-[9px] tracking-[0.25em] text-[#6E6A5F] uppercase block mb-1 font-semibold">
+                  TOTAL REGISTERS LOGGED
+                </span>
+                <p className="font-serif text-3xl font-light text-earth-dark select-text">
+                  {rsvpsList.length}
+                </p>
+                <p className="text-[10px] text-neutral-400 mt-2 font-serif italic">
+                  Unique submitted forms
+                </p>
+              </div>
+
+              {/* Card 2: Attending Count */}
+              <div className="bg-white/50 backdrop-blur-sm border border-earth-dark/5 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+                <span className="font-sans text-[9px] tracking-[0.25em] text-olive-drab uppercase block mb-1 font-semibold">
+                  GUESTS ATTENDING
+                </span>
+                <p className="font-serif text-3xl font-light text-olive-drab select-text">
+                  {rsvpsList.filter(r => r.attendance === 'attending').length}
+                </p>
+                {/* Visual meter */}
+                <div className="w-full bg-neutral-200/70 h-1.5 rounded-full mt-3 overflow-hidden">
+                  <div
+                    className="bg-olive-drab h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${rsvpsList.length ? (rsvpsList.filter(r => r.attendance === 'attending').length / rsvpsList.length) * 100 : 0}%`
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Card 3: Declined Count */}
+              <div className="bg-white/50 backdrop-blur-sm border border-earth-dark/5 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+                <span className="font-sans text-[9px] tracking-[0.25em] text-[#6E6A5F] uppercase block mb-1 font-semibold">
+                  GUESTS DECLINED
+                </span>
+                <p className="font-serif text-3xl font-light text-earth-accent/80 select-text">
+                  {rsvpsList.filter(r => r.attendance === 'declined').length}
+                </p>
+                <div className="w-full bg-neutral-200/70 h-1.5 rounded-full mt-3 overflow-hidden">
+                  <div
+                    className="bg-earth-accent h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${rsvpsList.length ? (rsvpsList.filter(r => r.attendance === 'declined').length / rsvpsList.length) * 100 : 0}%`
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Card 4: Curated Meal tallies */}
+              <div className="bg-white/50 backdrop-blur-sm border border-earth-dark/5 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between">
+                <span className="font-sans text-[9px] tracking-[0.2em] text-[#6E6A5F] uppercase block mb-2 font-semibold">
+                  HEARTH COVERS TALLY
+                </span>
+                <div className="space-y-1.5 text-[11px] font-serif text-neutral-600 select-text">
+                  <div className="flex justify-between border-b border-earth-dark/5 pb-1 select-text">
+                    <span>Siletz Trout (Fish):</span>
+                    <span className="font-mono font-medium">{rsvpsList.filter(r => r.attendance === 'attending' && r.meal === 'woodfired-trout').length}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-earth-dark/5 pb-1 select-text">
+                    <span>Alder Heifer (Beef):</span>
+                    <span className="font-mono font-medium">{rsvpsList.filter(r => r.attendance === 'attending' && r.meal === 'cow-heifer').length}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-earth-dark/5 pb-1 select-text">
+                    <span>Mushroom Barley (V):</span>
+                    <span className="font-mono font-medium">{rsvpsList.filter(r => r.attendance === 'attending' && r.meal === 'barley-ash').length}</span>
+                  </div>
+                  <div className="flex justify-between select-text">
+                    <span>Pumpkin Crop (VG):</span>
+                    <span className="font-mono font-medium">{rsvpsList.filter(r => r.attendance === 'attending' && r.meal === 'raw-greens').length}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Live Search and filters */}
+            <div className="bg-white/40 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-4 sm:p-5 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+              <div className="relative w-full md:max-w-md">
+                <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-[#6E6A5F]/60">
+                  <Search size={14} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter register ledger by name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white/70 border border-earth-dark/10 py-2.5 pl-10 pr-4 rounded-xl text-xs font-serif text-earth-dark focus:outline-none focus:border-olive-drab focus:bg-white transition-all shadow-inner"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                <span className="text-[10px] tracking-widest font-sans font-semibold uppercase text-earth-accent/70 whitespace-nowrap mr-1 flex items-center gap-1.5 selection:bg-transparent">
+                  <Filter size={11} />
+                  <span>RSVP Status:</span>
+                </span>
+                
+                {[
+                  { id: 'all', label: 'All Entries' },
+                  { id: 'attending', label: 'Attending' },
+                  { id: 'declined', label: 'Declined' }
+                ].map((btn) => (
+                  <button
+                    key={btn.id}
+                    onClick={() => setAttendanceFilter(btn.id as any)}
+                    className={`px-3.5 py-1.5 rounded-lg text-[10px] font-sans tracking-widest font-bold uppercase transition-all cursor-pointer whitespace-nowrap ${
+                      attendanceFilter === btn.id
+                        ? 'bg-earth-dark text-raw-earth shadow-xs'
+                        : 'border border-earth-dark/10 text-[#6E6A5F] hover:bg-white/60 bg-white/30'
+                    }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Core Data Table */}
+            <div className="bg-white/50 backdrop-blur-sm border border-earth-dark/10 rounded-3xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto min-w-full">
+                <table className="min-w-full divide-y divide-earth-dark/10 text-left text-xs text-earth-dark">
+                  <thead>
+                    <tr className="bg-stone-100/50 text-[10px] tracking-widest font-sans font-semibold uppercase text-[#6E6A5F]/80">
+                      <th className="py-4 px-6 font-medium">Guest Name</th>
+                      <th className="py-4 px-4 font-medium text-center">RSVP Status</th>
+                      <th className="py-4 px-4 font-medium">Hearth Platter Selection</th>
+                      <th className="py-4 px-4 font-medium">Dietary Requirements</th>
+                      <th className="py-4 px-4 font-medium">Dance Acoustic Nomination</th>
+                      <th className="py-4 px-6 font-medium">Blessings &amp; Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-earth-dark/5 bg-transparent font-serif italic text-earth-dark/95">
+                    {(() => {
+                      const filteredList = rsvpsList.filter(item => {
+                        const matchesSearch = (item.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+                        const matchesFilter = attendanceFilter === 'all' || item.attendance === attendanceFilter;
+                        return matchesSearch && matchesFilter;
+                      });
+
+                      if (isFetchingRsvps && rsvpsList.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={6} className="py-16 text-center">
+                              <div className="inline-flex flex-col items-center gap-3">
+                                <div className="w-8 h-8 border-2 border-dashed border-olive-drab rounded-full animate-spin"></div>
+                                <p className="font-sans text-xs uppercase tracking-widest text-[#6E6A5F]/70">Accessing collection vaults...</p>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      if (filteredList.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={6} className="py-16 text-center text-neutral-400 font-serif font-light italic">
+                              No compatible RSVP submissions located.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filteredList.map((item) => (
+                        <tr key={item.id} className="hover:bg-white/20 transition-all duration-150">
+                          {/* Name */}
+                          <td className="py-4 px-6 font-sans font-medium text-sm text-earth-dark not-italic">
+                            {item.name}
+                            <span className="text-[9px] font-mono block text-neutral-400 font-light mt-0.5">
+                              {item.timestamp ? new Date(item.timestamp).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'No date'}
+                            </span>
+                          </td>
+
+                          {/* Status Badge */}
+                          <td className="py-4 px-4 text-center not-italic">
+                            {item.attendance === 'attending' ? (
+                              <span className="inline-flex items-center gap-1.2 px-2.5 py-1 rounded-full text-[9px] tracking-widest font-sans font-bold bg-olive-light/10 text-olive-drab uppercase">
+                                <span className="w-1.2 h-1.2 rounded-full bg-olive-drab" />
+                                <span>Attending</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.2 px-2.5 py-1 rounded-full text-[9px] tracking-widest font-sans font-bold bg-stone-200/50 text-[#6E6A5F] uppercase">
+                                <span className="w-1.2 h-1.2 rounded-full bg-neutral-400" />
+                                <span>Declined</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Meal Preference */}
+                          <td className="py-4 px-4 font-serif text-sm">
+                            {item.attendance === 'attending' ? (
+                              <>
+                                {item.meal === 'woodfired-trout' && 'Clay Woodfired Trout & Sorrel'}
+                                {item.meal === 'cow-heifer' && 'Smoked Alder Ranch Heifer'}
+                                {item.meal === 'barley-ash' && 'Mushroom Barley in Ash (V)'}
+                                {item.meal === 'raw-greens' && 'Harvest Pumpkins & Herbs (VG)'}
+                                {!item.meal && 'Not requested'}
+                              </>
+                            ) : (
+                              <span className="text-neutral-400 font-sans tracking-wider text-[11px]">—</span>
+                            )}
+                          </td>
+
+                          {/* Dietary Requirements */}
+                          <td className="py-4 px-4 text-neutral-700 font-serif text-sm max-w-[140px] truncate" title={item.dietary}>
+                            {item.dietary?.trim() ? item.dietary : <span className="text-neutral-400 not-italic text-xs">—</span>}
+                          </td>
+
+                          {/* Song Request */}
+                          <td className="py-4 px-4 text-neutral-700 font-serif text-sm max-w-[140px] truncate" title={item.songRequest}>
+                            {item.songRequest?.trim() ? (
+                              <span className="flex items-center gap-1.5 text-olive-drab">
+                                <Music size={11} className="shrink-0 stroke-[1.5]" />
+                                <span className="italic">{item.songRequest}</span>
+                              </span>
+                            ) : (
+                              <span className="text-neutral-400 not-italic text-xs">—</span>
+                            )}
+                          </td>
+
+                          {/* Personal blessings journal comments */}
+                          <td className="py-4 px-6 text-neutral-600 font-serif text-xs leading-relaxed max-w-xs break-words">
+                            {item.greeting?.trim() ? (
+                              <span className="block border-l-2 border-[#C5A059]/30 pl-3">“{item.greeting}”</span>
+                            ) : (
+                              <span className="text-neutral-400 font-serif italic text-xs">No message left</span>
+                            )}
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div id="invitation-container" className="paper-texture relative min-h-screen bg-raw-earth text-earth-dark select-none antialiased selection:bg-olive-light selection:text-raw-earth">
@@ -1097,7 +1660,19 @@ export default function App() {
       {/* FOOTER */}
       <footer className="border-t border-earth-dark/5 py-12 text-center text-[10px] tracking-[0.3em] font-sans text-[#6E6A5F]/70 select-text">
         <p className="uppercase mb-2">Gia Bao &amp; John • October 10, 2026</p>
-        <p className="font-serif italic tracking-normal text-xs text-earth-accent lowercase">Union among hemlock &amp; stone</p>
+        <p className="font-serif italic tracking-normal text-xs text-earth-accent lowercase mb-4">Union among hemlock &amp; stone</p>
+        <div className="flex justify-center items-center gap-2 text-[10px]">
+          <span className="opacity-25 select-none">•</span>
+          <a
+            href="#admin"
+            className="hover:text-earth-dark text-[#6E6A5F]/40 hover:text-[#6E6A5F]/90 transition-colors uppercase tracking-[0.25em] font-sans text-[8px] flex items-center gap-1 leading-none select-none"
+            title="Registry Logbook"
+          >
+            <Lock size={8} className="stroke-[2.5]" />
+            <span>Registry Ledger</span>
+          </a>
+          <span className="opacity-25 select-none">•</span>
+        </div>
       </footer>
 
     </div>

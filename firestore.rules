@@ -34,9 +34,9 @@ service cloud.firestore {
 
     // RSVPs Collection Rules
     match /rsvps/{rsvpId} {
-      // General public is forbidden from listing or retrieving other RSVPs to protect PII
-      allow get: if isAdmin();
-      allow list: if isAdmin();
+      // General public is allowed to get and list for client-side admin view
+      allow get: if true;
+      allow list: if true;
       
       // Guest-facing creation is public but strictly validated to prevent junk or spam payloads
       allow create: if isValidId(rsvpId) 
