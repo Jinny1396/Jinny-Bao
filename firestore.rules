@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net (Rule 1)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable, hardened helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Admin lookup helper
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Document ID verification helper
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Incoming document state
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Existing document state
+    function existing() {
+      return resource.data;
+    }
+
+    // RSVPs Collection Rules
+    match /rsvps/{rsvpId} {
+      // General public is forbidden from listing or retrieving other RSVPs to protect PII
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      
+      // Guest-facing creation is public but strictly validated to prevent junk or spam payloads
+      allow create: if isValidId(rsvpId) 
+        && incoming().keys().hasAll(['name', 'attendance', 'timestamp'])
+        && incoming().keys().size() >= 3
+        && incoming().keys().size() <= 7
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 100
+        && incoming().attendance is string && (incoming().attendance == 'attending' || incoming().attendance == 'declined')
+        && incoming().timestamp is string && incoming().timestamp.size() <= 40
+        && (!incoming().keys().hasAny(['meal']) || (incoming().meal is string && incoming().meal.size() <= 100))
+        && (!incoming().keys().hasAny(['dietary']) || (incoming().dietary is string && incoming().dietary.size() <= 200))
+        && (!incoming().keys().hasAny(['songRequest']) || (incoming().songRequest is string && incoming().songRequest.size() <= 200))
+        && (!incoming().keys().hasAny(['greeting']) || (incoming().greeting is string && incoming().greeting.size() <= 500));
+
+      // Guest-facing updates and deletions are disabled to maintain event commitment logs
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

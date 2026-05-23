@@ -19,6 +19,8 @@ import {
   Compass,
   Smile
 } from 'lucide-react';
+import { db, handleFirestoreError, OperationType } from './firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
@@ -290,14 +292,38 @@ export default function App() {
   }, []);
 
   // RSVP submission function
-  const handleRsvpSubmit = (e: React.FormEvent) => {
+  const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rsvpState.name.trim()) return;
 
     setIsSubmitting(true);
     
-    // Simulate real database store or secure callback
-    setTimeout(() => {
+    const timestampIso = new Date().toISOString();
+    // Generate a valid document ID (alphanumeric and dashes only, obeying isValidId rule)
+    const sanitizedName = rsvpState.name.toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+    const rsvpId = (sanitizedName || 'guest') + '-' + Math.floor(Math.random() * 1000000);
+
+    // Prepare payload precisely matching the schema in firebase-blueprint.json
+    const rsvpPayload: Record<string, string> = {
+      name: rsvpState.name.trim(),
+      attendance: rsvpState.attendance,
+      timestamp: timestampIso
+    };
+
+    if (rsvpState.attendance === 'attending') {
+      if (rsvpState.meal) rsvpPayload.meal = rsvpState.meal;
+      if (rsvpState.dietary.trim()) rsvpPayload.dietary = rsvpState.dietary.trim();
+      if (rsvpState.songRequest.trim()) rsvpPayload.songRequest = rsvpState.songRequest.trim();
+    }
+    if (rsvpState.greeting.trim()) {
+      rsvpPayload.greeting = rsvpState.greeting.trim();
+    }
+
+    try {
+      // Direct Firestore write
+      const rsvpDocRef = doc(db, 'rsvps', rsvpId);
+      await setDoc(rsvpDocRef, rsvpPayload);
+
       setIsSubmitting(false);
       setIsSubmitted(true);
       
@@ -334,9 +360,13 @@ export default function App() {
       // Persist client RSVP automatically
       localStorage.setItem('GIA_BAO_JOHN_RSVP', JSON.stringify({
         ...rsvpState,
-        timestamp: new Date().toISOString()
+        timestamp: timestampIso
       }));
-    }, 1500);
+    } catch (error) {
+      setIsSubmitting(false);
+      // Converts permission errors into diagnostics for the build/linter environment as per guidelines
+      handleFirestoreError(error, OperationType.CREATE, `rsvps/${rsvpId}`);
+    }
   };
 
   const resetRsvp = () => {

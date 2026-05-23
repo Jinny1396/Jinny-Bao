@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "rsvp": {
+      "title": "RSVP",
+      "description": "Wedding guest RSVP submission",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full name of the guest"
+        },
+        "attendance": {
+          "type": "string",
+          "enum": ["attending", "declined"],
+          "description": "Attendance status selection"
+        },
+        "meal": {
+          "type": "string",
+          "description": "Meal selection if attending"
+        },
+        "dietary": {
+          "type": "string",
+          "description": "Dietary requirements or restrictions"
+        },
+        "songRequest": {
+          "type": "string",
+          "description": "Suggested song request for the playlist"
+        },
+        "greeting": {
+          "type": "string",
+          "description": "Personal blessing or greeting comment for the couple"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when the RSVP was submitted"
+        }
+      },
+      "required": ["name", "attendance", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/rsvps/{rsvpId}": {
+      "schema": "rsvp",
+      "description": "Collection of wedding RSVP form submissions"
+    }
+  }
+}
