@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { translations } from './translations';
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
@@ -128,6 +129,22 @@ interface Petal {
 }
 
 export default function App() {
+  const [lang, setLang] = useState<'ENG' | 'VIE'>(() => {
+    return (localStorage.getItem('BAO_JOHN_LANG') as 'ENG' | 'VIE') || 'ENG';
+  });
+
+  const toggleLanguage = () => {
+    const nextLang = lang === 'ENG' ? 'VIE' : 'ENG';
+    setLang(nextLang);
+    localStorage.setItem('BAO_JOHN_LANG', nextLang);
+  };
+
+  const t = translations[lang];
+
+  useEffect(() => {
+    document.title = t.weddingTitle;
+  }, [lang]);
+
   // Administrative state managers
   const [isAdminViewActive, setIsAdminViewActive] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
@@ -1009,6 +1026,19 @@ export default function App() {
 
       {/* Floating Ambient music player in Eothen Organic Spirit */}
       <div className="fixed top-6 right-6 z-50 flex items-center gap-3">
+        {/* Language selector button */}
+        <button
+          onClick={toggleLanguage}
+          type="button"
+          id="language-toggle"
+          aria-label="Switch language / Đổi ngôn ngữ"
+          className="px-4 py-3 text-[11px] font-sans font-bold hover:bg-earth-dark hover:text-raw-earth hover:border-transparent transition-all duration-300 rounded-full border border-earth-accent/20 bg-raw-earth/75 backdrop-blur-md shadow-sm cursor-pointer flex items-center gap-1 uppercase"
+        >
+          <span className={lang === 'ENG' ? 'text-earth-dark font-black' : 'text-earth-dark/40 font-medium'}>ENG</span>
+          <span className="text-earth-dark/20 font-light mx-0.5">|</span>
+          <span className={lang === 'VIE' ? 'text-earth-dark font-black' : 'text-earth-dark/40 font-medium'}>VIE</span>
+        </button>
+
         <button
           onClick={toggleAudio}
           type="button"
@@ -1018,12 +1048,12 @@ export default function App() {
         >
           {isPlayingAudio ? (
             <div className="flex items-center gap-2">
-              <span className="text-[10px] tracking-widest font-sans uppercase">AMBIENT ON</span>
+              <span className="text-[10px] tracking-widest font-sans uppercase">{t.navSoundOn}</span>
               <Volume2 size={13} className="animate-pulse" />
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-[10px] tracking-widest opacity-60 font-sans uppercase">PLAY NATURE ACCENT</span>
+              <span className="text-[10px] tracking-widest opacity-60 font-sans uppercase">{t.navSoundOff}</span>
               <VolumeX size={13} className="opacity-60" />
             </div>
           )}
@@ -1039,7 +1069,7 @@ export default function App() {
           className={`flex items-center gap-3 transition-all duration-500 group ${activeSection === 'hero' ? 'text-earth-dark font-medium' : 'text-earth-dark/40 hover:text-earth-dark'}`}
         >
           <span className="font-serif">I.</span> 
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">THE DATE</span>
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">{t.romanNavDate}</span>
           <span className={`w-1.5 h-1.5 rounded-full bg-earth-dark transition-transform duration-300 ${activeSection === 'hero' ? 'scale-100' : 'scale-0'}`}></span>
         </a>
 
@@ -1048,7 +1078,7 @@ export default function App() {
           className={`flex items-center gap-3 transition-all duration-500 group ${activeSection === 'details' ? 'text-earth-dark font-medium' : 'text-earth-dark/40 hover:text-earth-dark'}`}
         >
           <span className="font-serif">II.</span> 
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">THE DETAILS</span>
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">{t.romanNavDetails}</span>
           <span className={`w-1.5 h-1.5 rounded-full bg-earth-dark transition-transform duration-300 ${activeSection === 'details' ? 'scale-100' : 'scale-0'}`}></span>
         </a>
 
@@ -1057,7 +1087,7 @@ export default function App() {
           className={`flex items-center gap-3 transition-all duration-500 group ${activeSection === 'story' ? 'text-earth-dark font-medium' : 'text-earth-dark/40 hover:text-earth-dark'}`}
         >
           <span className="font-serif">III.</span> 
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">OUR STORY</span>
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">{t.romanNavStory}</span>
           <span className={`w-1.5 h-1.5 rounded-full bg-earth-dark transition-transform duration-300 ${activeSection === 'story' ? 'scale-100' : 'scale-0'}`}></span>
         </a>
 
@@ -1066,7 +1096,7 @@ export default function App() {
           className={`flex items-center gap-3 transition-all duration-500 group ${activeSection === 'rsvp' ? 'text-earth-dark font-medium' : 'text-earth-dark/40 hover:text-earth-dark'}`}
         >
           <span className="font-serif">IV.</span> 
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">RSVP</span>
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">{t.romanNavRsvp}</span>
           <span className={`w-1.5 h-1.5 rounded-full bg-earth-dark transition-transform duration-300 ${activeSection === 'rsvp' ? 'scale-100' : 'scale-0'}`}></span>
         </a>
 
@@ -1080,7 +1110,7 @@ export default function App() {
           id="sticky-rsvp-btn"
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-earth-dark text-raw-earth text-xs tracking-[0.2em] font-sans hover:bg-earth-dark/90 transition-all duration-300 active:scale-95 shadow-lg border border-earth-dark/5"
         >
-          <span>RSVP</span>
+          <span>{t.stickyRsvpBtn}</span>
           <ArrowRight size={12} className="opacity-80" />
         </a>
       </div>
@@ -1096,37 +1126,36 @@ export default function App() {
           {/* Header Accent Meta line */}
           <div className="flex flex-col gap-2 items-start opacity-0 animate-letter-spacing-unfold">
             <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none">
-              Gathering for the Gathering
+              {t.gatheringHeader}
             </span>
             <span className="text-xs font-serif italic text-earth-accent font-light">
-              Under the changing light of October
+              {t.gatheringSub}
             </span>
           </div>
 
           {/* Core Title (Names of Couple) */}
           <div className="my-auto py-12 md:py-16">
             <h1 className="text-[12vw] sm:text-[8vw] lg:text-[6.5vw] font-serif font-light leading-[1.05] tracking-tight mb-6 select-text">
-              Gia Bao <br className="sm:hidden" />
-              <span className="text-earth-accent italic font-normal">&amp;</span> John
+              {t.weddingName}
             </h1>
             
             {/* The Vibe Narrative Block */}
             <p className="max-w-md font-serif text-lg md:text-xl text-earth-accent font-light leading-relaxed mb-8 select-text">
-              Invite you to share in a quiet weekend of woodfire, forest walks, and the commitment of vows.
+              {t.heroVibeText}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-6 mt-4 font-sans text-[11px] tracking-[0.25em] text-earth-dark/70">
               <div className="flex items-center gap-3">
                 <span className="text-olive-light">10</span>
-                <span>OCTOBER, 2026</span>
+                <span>{t.october}</span>
               </div>
               <div className="hidden sm:inline text-earth-dark/20">•</div>
               <div className="flex items-center gap-3">
-                <span>PORTLAND, OREGON</span>
+                <span>{t.portland}</span>
               </div>
               <div className="hidden sm:inline text-earth-dark/20">•</div>
               <div className="flex items-center gap-3">
-                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">the wild meadow</span>
+                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
               </div>
             </div>
           </div>
@@ -1139,7 +1168,7 @@ export default function App() {
 
             {/* Countdown Days */}
             <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">Days</span>
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownDays}</span>
               <div className="flex items-baseline gap-2">
                 <span className="font-serif text-2xl md:text-3xl font-light">{countdown.days}</span>
                 <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
@@ -1148,7 +1177,7 @@ export default function App() {
 
             {/* Countdown Hours */}
             <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">Hours</span>
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownHours}</span>
               <div className="flex items-baseline gap-2">
                 <span className="font-serif text-2xl md:text-3xl font-light">{countdown.hours}</span>
                 <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
@@ -1157,7 +1186,7 @@ export default function App() {
 
             {/* Countdown Minutes */}
             <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">Minutes</span>
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownMinutes}</span>
               <div className="flex items-baseline gap-2">
                 <span className="font-serif text-2xl md:text-3xl font-light">{countdown.minutes}</span>
                 <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
@@ -1166,7 +1195,7 @@ export default function App() {
 
             {/* Countdown Seconds */}
             <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">Seconds</span>
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownSeconds}</span>
               <div className="flex items-baseline gap-2">
                 <span className="font-serif text-2xl md:text-3xl font-light">{countdown.seconds}</span>
                 <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
@@ -1186,24 +1215,23 @@ export default function App() {
             {/* Header Column */}
             <div className="lg:col-span-5 flex flex-col gap-6">
               <span className="font-serif text-sm italic text-olive-light font-light leading-none">
-                02 // The Gathering Grounds
+                {t.detailsSectionNum}
               </span>
               <h2 className="text-4xl md:text-5xl font-serif font-light tracking-tight leading-none">
-                Where the <br />
-                world slows down.
+                {t.detailsTitle}
               </h2>
               <p className="font-serif text-neutral-600 font-light leading-relaxed text-base select-text">
-                The ceremony and celebratory feast will both be hosted at the <span className="text-earth-dark font-medium italic">Whispering Meadow Ranch</span>. An isolated oasis wrapped in centuries-old fir pines, located thirty miles east of the Portland Gorge.
+                {t.detailsDesc}
               </p>
 
               {/* Ceremony Detail Block */}
               <div className="mt-8 border-l-2 border-olive-drab/25 pl-6 py-2 flex flex-col gap-3">
                 <div className="flex items-center gap-2.5">
                   <Calendar size={15} className="text-olive-drab" />
-                  <span className="text-xs tracking-[0.18em] font-sans font-semibold uppercase text-earth-dark">THE CEREMONY</span>
+                  <span className="text-xs tracking-[0.18em] font-sans font-semibold uppercase text-earth-dark">{t.theCeremony}</span>
                 </div>
                 <p className="font-serif italic text-sm text-earth-accent">
-                  Four P.M. Under the giant Oak on the West Ridge. Suitable footwear for mountain turf recommended.
+                  {t.theCeremonyDesc}
                 </p>
               </div>
 
@@ -1211,16 +1239,16 @@ export default function App() {
               <div className="border-l-2 border-olive-drab/25 pl-6 py-2 flex flex-col gap-3">
                 <div className="flex items-center gap-2.5">
                   <Utensils size={15} className="text-olive-drab" />
-                  <span className="text-xs tracking-[0.18em] font-sans font-semibold uppercase text-earth-dark">THE GATHERING & FEAST</span>
+                  <span className="text-xs tracking-[0.18em] font-sans font-semibold uppercase text-earth-dark">{t.theGathering}</span>
                 </div>
                 <p className="font-serif italic text-sm text-earth-accent">
-                  To follow immediately within the wooden Glass Barn. Fine organic wines, locally-foraged culinary boards, clay ovens, forest breeze.
+                  {t.theGatheringDesc}
                 </p>
               </div>
               
               <div className="flex items-center gap-3 text-xs text-olive-drab/80 mt-2 font-mono bg-olive-light/5 p-3 rounded border border-olive-light/10">
                 <Info size={14} className="shrink-0" />
-                <span>Accommodation details & guidelines available upon request.</span>
+                <span>{t.accommodationTip}</span>
               </div>
             </div>
 
@@ -1230,7 +1258,7 @@ export default function App() {
               <div className="relative rounded-2xl border border-earth-dark/10 p-4 md:p-6 bg-raw-earth shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden">
                 <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-1 rounded-full border border-earth-dark/10 bg-raw-earth/80 backdrop-blur-sm text-[9px] tracking-widest font-sans uppercase">
                   <Compass size={11} className="text-earth-dark/60" />
-                  <span>Interactive Map & Trails</span>
+                  <span>{t.interactiveMapBadge}</span>
                 </div>
 
                 {/* Hand Drawn Organic Map Vector Design */}
@@ -1246,11 +1274,11 @@ export default function App() {
                   
                   {/* The river */}
                   <path d="M -20,380 C 120,360 210,220 280,180 C 350,140 400,60 520,30" className="stroke-olive-light stroke-[2.2] opacity-40" />
-                  <text x="350" y="85" className="font-serif italic text-[10px] fill-olive-light font-light stroke-none scale-x-[0.95]">Siletz River Fork</text>
+                  <text x="350" y="85" className="font-serif italic text-[10px] fill-olive-light font-light stroke-none scale-x-[0.95]">{t.mapSiletzRiver}</text>
 
                   {/* Meandering Forest dirt road */}
                   <path d="M 120,420 C 140,300 80,240 180,190 C 260,150 280,80 340,-20" className="stroke-earth-accent/40 stroke-[1.2] stroke-dasharray-[5,5]" />
-                  <text x="105" y="380" className="font-sans text-[8px] tracking-widest fill-earth-accent/70 font-light stroke-none rotate-[-60deg]">Whispering Forest Pass</text>
+                  <text x="105" y="380" className="font-sans text-[8px] tracking-widest fill-earth-accent/70 font-light stroke-none rotate-[-60deg]">{t.mapForestPass}</text>
 
                   {/* Beacons and details */}
                   {/* PIN I: The Western Ridge (Ceremony Location) */}
@@ -1261,8 +1289,8 @@ export default function App() {
                     
                     {/* Hand drawn custom marker label banner */}
                     <rect x="12" y="-20" width="138" height="34" rx="4" className="fill-raw-earth/95 stroke-earth-dark/15 stroke-[0.8]" />
-                    <text x="20" y="-8" className="font-sans text-[9px] font-semibold fill-earth-dark stroke-none tracking-wider">I. WEST RIDGE</text>
-                    <text x="20" y="4" className="font-serif italic text-[9px] fill-earth-accent/95 stroke-none leading-none">The Ceremony — 4:00 PM</text>
+                    <text x="20" y="-8" className="font-sans text-[9px] font-semibold fill-earth-dark stroke-none tracking-wider">{t.mapWestRidgeLabel}</text>
+                    <text x="20" y="4" className="font-serif italic text-[9px] fill-earth-accent/95 stroke-none leading-none">{t.mapWestRidgeSub}</text>
                   </g>
 
                   {/* PIN II: The Glass Barn Reception */}
@@ -1273,8 +1301,8 @@ export default function App() {
                     
                     {/* Label banner */}
                     <rect x="12" y="-12" width="138" height="34" rx="4" className="fill-raw-earth/95 stroke-earth-dark/15 stroke-[0.8]" />
-                    <text x="20" y="0" className="font-sans text-[9px] font-semibold fill-earth-dark stroke-none tracking-wider">II. THE GLASS BARN</text>
-                    <text x="20" y="12" className="font-serif italic text-[9px] fill-olive-drab stroke-none leading-none">Feast &amp; Hearth — 5:30 PM</text>
+                    <text x="20" y="0" className="font-sans text-[9px] font-semibold fill-earth-dark stroke-none tracking-wider">{t.mapGlassBarnLabel}</text>
+                    <text x="20" y="12" className="font-serif italic text-[9px] fill-olive-drab stroke-none leading-none">{t.mapGlassBarnSub}</text>
                   </g>
 
                   {/* Pines sketches */}
@@ -1313,7 +1341,7 @@ export default function App() {
                     rel="noopener noreferrer" 
                     className="inline-flex items-center gap-1.5 underline underline-offset-4 hover:text-earth-dark font-medium font-sans tracking-wide text-[10px] uppercase"
                   >
-                    <span>Get Directions</span>
+                    <span>{t.mapGetDirections}</span>
                     <ArrowRight size={10} />
                   </a>
                 </div>
@@ -1335,10 +1363,10 @@ export default function App() {
 
           <div className="max-w-3xl">
             <span className="font-serif text-sm italic text-olive-light font-light mb-6 block">
-              03 // The Path Taken
+              {t.storySectionNum}
             </span>
             <h2 className="text-4xl md:text-5xl font-serif font-light tracking-tight mb-12 leading-tight">
-              A commitment born under open sky, carried by the seasons.
+              {t.storyTitle}
             </h2>
 
             {/* Editorial asymmetric layout */}
@@ -1349,9 +1377,9 @@ export default function App() {
                   2021
                 </span>
                 <div className="md:col-span-10">
-                  <h3 className="font-sans text-xs tracking-widest font-semibold uppercase mb-2">The Whispering Meadow</h3>
+                  <h3 className="font-sans text-xs tracking-widest font-semibold uppercase mb-2">{t.story2021Title}</h3>
                   <p className="font-serif text-base text-neutral-600 font-light leading-relaxed select-text">
-                    We met on an organic lavender farm on the coast where John was restoring the dry stone slate walls, and Gia Bao was tending the bees. Our first conversations turned into long walks through hemlock branches.
+                    {t.story2021Desc}
                   </p>
                 </div>
               </div>
@@ -1361,9 +1389,9 @@ export default function App() {
                   2024
                 </span>
                 <div className="md:col-span-10">
-                  <h3 className="font-sans text-xs tracking-widest font-semibold uppercase mb-2">The Stone Cottage</h3>
+                  <h3 className="font-sans text-xs tracking-widest font-semibold uppercase mb-2">{t.story2024Title}</h3>
                   <p className="font-serif text-base text-neutral-600 font-light leading-relaxed select-text">
-                    In the heavy fog of January, we found a moss-covered home and rebuilt the kitchen with timbers felled nearby. Together, we cooked woodfired breads and lived in rhythmic silence with the local crows.
+                    {t.story2024Desc}
                   </p>
                 </div>
               </div>
@@ -1373,9 +1401,9 @@ export default function App() {
                   2026
                 </span>
                 <div className="md:col-span-10">
-                  <h3 className="font-sans text-xs tracking-widest font-semibold uppercase mb-2">The Autumn Vow</h3>
+                  <h3 className="font-sans text-xs tracking-widest font-semibold uppercase mb-2">{t.story2026Title}</h3>
                   <p className="font-serif text-base text-neutral-600 font-light leading-relaxed select-text">
-                    Now, with our hearts grounded in the clay of the hills, we wish to commit ourselves in front of those we love most. An intimate union with deep food, rich logs, and rustic laughter.
+                    {t.story2026Desc}
                   </p>
                 </div>
               </div>
@@ -1422,13 +1450,13 @@ export default function App() {
 
                   <div className="text-center mb-8">
                     <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none block mb-3">
-                      IV // THE UNION REGISTRY
+                      {t.rsvpSectionNum}
                     </span>
                     <h2 className="text-3xl md:text-4xl font-serif font-light mb-3 italic">
-                      RSVP
+                      {t.rsvpTitle}
                     </h2>
                     <p className="font-sans text-[11px] tracking-widest text-[#6E6A5F] uppercase">
-                      Kindly reply by August 15, 2026
+                      {t.rsvpReplyBy}
                     </p>
                   </div>
 
@@ -1438,13 +1466,13 @@ export default function App() {
                     {/* Name block input */}
                     <div className="flex flex-col md:flex-row md:items-baseline md:gap-3 flex-wrap">
                       <label htmlFor="name-input" className="text-base text-earth-accent">
-                        My full name is
+                        {t.rsvpMyNameIs}
                       </label>
                       <input 
                         id="name-input"
                         type="text" 
                         required
-                        placeholder="[ Enter your name here ]"
+                        placeholder={t.rsvpEnterNamePlaceholder}
                         value={rsvpState.name}
                         onChange={(e) => setRsvpState({ ...rsvpState, name: e.target.value })}
                         className="py-1 bg-transparent border-b border-earth-dark/20 text-lg text-earth-dark placeholder-neutral-400 focus:outline-none focus:border-olive-drab transition-colors flex-1 font-serif italic text-center md:text-left min-w-[200px]"
@@ -1453,7 +1481,7 @@ export default function App() {
 
                     {/* Attendance Radio Toggle */}
                     <div className="pt-4 flex flex-col md:flex-row md:items-center gap-6">
-                      <span className="text-base text-earth-accent leading-none">Under the autumn pines:</span>
+                      <span className="text-base text-earth-accent leading-none">{t.rsvpUnderPines}</span>
                       <div className="flex gap-4">
                         <button
                           type="button"
@@ -1466,7 +1494,7 @@ export default function App() {
                           }`}
                         >
                           <Check size={12} className={rsvpState.attendance === 'attending' ? 'opacity-100' : 'opacity-0'} />
-                          <span>I WILL BE THERE</span>
+                          <span>{t.rsvpWillBeThere}</span>
                         </button>
 
                         <button
@@ -1480,7 +1508,7 @@ export default function App() {
                           }`}
                         >
                           <Check size={12} className={rsvpState.attendance === 'declined' ? 'opacity-100' : 'opacity-0'} />
-                          <span>REGRETFULLY DECLINE</span>
+                          <span>{t.rsvpRegretfullyDecline}</span>
                         </button>
                       </div>
                     </div>
@@ -1498,7 +1526,7 @@ export default function App() {
                           {/* Meal Preference Selection */}
                           <div className="flex flex-col gap-2">
                             <label htmlFor="meal-select" className="text-sm font-sans tracking-widest text-[#6E6A5F] uppercase leading-none mb-1">
-                              FORGED SEASONAL MEAL SELECTION
+                              {t.rsvpMealSelectionLabel}
                             </label>
                             
                             <div className="relative">
@@ -1508,10 +1536,10 @@ export default function App() {
                                 onChange={(e) => setRsvpState({ ...rsvpState, meal: e.target.value })}
                                 className="w-full py-3 px-4 bg-transparent border border-earth-dark/20 focus:outline-none focus:border-olive-drab rounded-xl font-serif text-sm italic appearance-none cursor-pointer text-earth-dark"
                               >
-                                <option value="woodfired-trout">Clay-Oven Woodfired Siletz Trout with Foraged Nettles & Wild Sorrel</option>
-                                <option value="cow-heifer">Smoked Pine-Tip Alder Ranch Heifer with Saffron-Tossed Root Thyme</option>
-                                <option value="barley-ash">Mushroom Barley baked under Ash & Oak-Smoked Salt, Goat Curd (V)</option>
-                                <option value="raw-greens">Harvest Heritage Pumpkins with Fermented Nuts, Roasted Herbs (VG)</option>
+                                <option value="woodfired-trout">{t.rsvpMealTrout}</option>
+                                <option value="cow-heifer">{t.rsvpMealBeef}</option>
+                                <option value="barley-ash">{t.rsvpMealBarley}</option>
+                                <option value="raw-greens">{t.rsvpMealGreens}</option>
                               </select>
                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-earth-accent">
                                 <ChevronDown size={14} />
@@ -1522,12 +1550,12 @@ export default function App() {
                           {/* Dietary list input */}
                           <div className="flex flex-col md:flex-row md:items-baseline md:gap-3 flex-wrap">
                             <label htmlFor="dietary-input" className="text-base text-earth-accent">
-                              My dietary requirements include
+                              {t.rsvpDietaryLabel}
                             </label>
                             <input 
                               id="dietary-input"
                               type="text" 
-                              placeholder="[ e.g. nut allergies, vegan, none ]"
+                              placeholder={t.rsvpDietaryPlaceholder}
                               value={rsvpState.dietary}
                               onChange={(e) => setRsvpState({ ...rsvpState, dietary: e.target.value })}
                               className="py-1 bg-transparent border-b border-earth-dark/20 text-sm text-earth-dark placeholder-neutral-400 focus:outline-none focus:border-olive-drab transition-colors flex-1 font-serif italic text-center md:text-left min-w-[200px]"
@@ -1537,12 +1565,12 @@ export default function App() {
                           {/* Wooden Floor Song Input */}
                           <div className="flex flex-col md:flex-row md:items-baseline md:gap-3 flex-wrap pt-2">
                             <label htmlFor="song-input" className="text-base text-earth-accent">
-                              I promise to dance if the forest acoustic plays
+                              {t.rsvpSongLabel}
                             </label>
                             <input 
                               id="song-input"
                               type="text" 
-                              placeholder="[ Nominate a warm song ]"
+                              placeholder={t.rsvpSongPlaceholder}
                               value={rsvpState.songRequest}
                               onChange={(e) => setRsvpState({ ...rsvpState, songRequest: e.target.value })}
                               className="py-1 bg-transparent border-b border-earth-dark/20 text-sm text-earth-dark placeholder-neutral-400 focus:outline-none focus:border-olive-drab transition-colors flex-1 font-serif italic text-center md:text-left min-w-[200px]"
@@ -1555,12 +1583,12 @@ export default function App() {
                     {/* Simple Message greeting note */}
                     <div className="flex flex-col gap-2 pt-2">
                       <label htmlFor="greeting-text" className="text-[10px] tracking-widest font-sans font-semibold uppercase text-earth-accent">
-                        Leave a physical journal note for Gia Bao &amp; John
+                        {t.rsvpGreetingLabel}
                       </label>
                       <textarea
                         id="greeting-text"
                         rows={3}
-                        placeholder="[ Woodfired memories, warm blessings or comments... ]"
+                        placeholder={t.rsvpGreetingPlaceholder}
                         value={rsvpState.greeting}
                         onChange={(e) => setRsvpState({ ...rsvpState, greeting: e.target.value })}
                         className="w-full p-4 bg-transparent border border-earth-dark/15 focus:outline-none focus:border-olive-drab rounded-xl font-serif text-sm italic placeholder-neutral-400 leading-relaxed text-earth-dark resize-none"
@@ -1577,11 +1605,11 @@ export default function App() {
                         {isSubmitting ? (
                           <>
                             <div className="w-4.5 h-4.5 border-2 border-dashed border-white/80 rounded-full animate-spin"></div>
-                            <span>TRANSMITTING REGISTRY...</span>
+                            <span>{t.rsvpTransmitting}</span>
                           </>
                         ) : (
                           <>
-                            <span>COMMIT REGISTRY ENTRY</span>
+                            <span>{t.rsvpCommitEntry}</span>
                             <ArrowRight size={13} />
                           </>
                         )}
@@ -1607,25 +1635,25 @@ export default function App() {
                   </div>
 
                   <span className="font-sans text-[10px] tracking-[0.4em] text-olive-drab uppercase block mb-3">
-                    REGISTRY ENTRY LOGGED
+                    {t.thankYouEntryLogged}
                   </span>
                   
                   <p className="font-handwriting text-5xl md:text-6xl text-earth-accent my-6 leading-tight select-text">
-                    With all our hearts, thank you.
+                    {t.thankYouTitle}
                   </p>
 
                   <p className="font-serif text-base text-neutral-600 font-light max-w-md mx-auto leading-relaxed mb-8 select-text">
-                    We cannot wait to share the quiet gold of October with you in the mountains. Your entry has been recorded in our physical catalog.
+                    {t.thankYouDesc}
                   </p>
 
                   {rsvpState.attendance === 'attending' && (
                     <div className="p-4 rounded-xl border border-olive-light/10 bg-olive-light/5 text-xs text-olive-drab font-sans tracking-wide max-w-sm mx-auto mb-8">
-                      <p className="font-semibold uppercase mb-1">Your Selected Hearth Platter:</p>
+                      <p className="font-semibold uppercase mb-1">{t.thankYouMealPlatter}</p>
                       <p className="font-serif italic text-earth-dark/80 text-sm">
-                        {rsvpState.meal === 'woodfired-trout' && 'Clay-Oven Woodfired Siletz Trout & Wild Sorrel'}
-                        {rsvpState.meal === 'cow-heifer' && 'Smoked Pine-Tip Alder Ranch Heifer & Thyme'}
-                        {rsvpState.meal === 'barley-ash' && 'Mushroom Barley Baked Under Ash (V)'}
-                        {rsvpState.meal === 'raw-greens' && 'Harvest Heritage Pumpkins & Herbs (VG)'}
+                        {rsvpState.meal === 'woodfired-trout' && t.rsvpMealTrout}
+                        {rsvpState.meal === 'cow-heifer' && t.rsvpMealBeef}
+                        {rsvpState.meal === 'barley-ash' && t.rsvpMealBarley}
+                        {rsvpState.meal === 'raw-greens' && t.rsvpMealGreens}
                       </p>
                     </div>
                   )}
@@ -1637,14 +1665,14 @@ export default function App() {
                       id="edit-rsvp-btn"
                       className="px-6 py-2.5 rounded-full border border-earth-dark/20 text-xs font-sans tracking-widest text-[#6E6A5F] hover:text-earth-dark hover:border-earth-dark transition-all duration-300 cursor-pointer"
                     >
-                      EDIT REGISTRY DETAILS
+                      {t.thankYouEditBtn}
                     </button>
                     
                     <a
                       href="#details"
                       className="inline-flex items-center gap-1.5 text-xs font-sans font-semibold tracking-widest hover:underline text-earth-dark"
                     >
-                      <span>REVISIT DIRECTIONS</span>
+                      <span>{t.thankYouRevisitDirections}</span>
                       <ArrowRight size={12} />
                     </a>
                   </div>
@@ -1659,8 +1687,8 @@ export default function App() {
 
       {/* FOOTER */}
       <footer className="border-t border-earth-dark/5 py-12 text-center text-[10px] tracking-[0.3em] font-sans text-[#6E6A5F]/70 select-text">
-        <p className="uppercase mb-2">Gia Bao &amp; John • October 10, 2026</p>
-        <p className="font-serif italic tracking-normal text-xs text-earth-accent lowercase mb-4">Union among hemlock &amp; stone</p>
+        <p className="uppercase mb-2">{t.weddingName} • {lang === 'ENG' ? 'October 10, 2026' : '10 tháng 10, 2026'}</p>
+        <p className="font-serif italic tracking-normal text-xs text-earth-accent lowercase mb-4">{t.footerUnionText}</p>
         <div className="flex justify-center items-center gap-2 text-[10px]">
           <span className="opacity-25 select-none">•</span>
           <a
@@ -1669,7 +1697,7 @@ export default function App() {
             title="Registry Logbook"
           >
             <Lock size={8} className="stroke-[2.5]" />
-            <span>Registry Ledger</span>
+            <span>{t.footerRegistryLedger}</span>
           </a>
           <span className="opacity-25 select-none">•</span>
         </div>
