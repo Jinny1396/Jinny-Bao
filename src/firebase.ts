@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -11,6 +12,9 @@ export const auth = getAuth(app);
 
 // Initialize Firestore with specific Database ID (critical for compilation and multi-database capability)
 export const db = getFirestore(app, 'ai-studio-e7e5670b-569f-45ab-85a1-e55b971f2c28');
+
+// Initialize Storage
+export const storage = getStorage(app);
 
 /**
  * Operation types for tracking failures

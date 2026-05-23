@@ -26,9 +26,10 @@ import {
   Search,
   Filter
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from './firebase';
-import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { translations } from './translations';
+import { db, storage, handleFirestoreError, OperationType } from './firebase';
+import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { translations, type Translations } from './translations';
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
@@ -139,11 +140,58 @@ export default function App() {
     localStorage.setItem('BAO_JOHN_LANG', nextLang);
   };
 
-  const t = translations[lang];
+  const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
+  const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
+
+  // States for CMS Panel in Admin view
+  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms'>('rsvps');
+  const [cmsLang, setCmsLang] = useState<'ENG' | 'VIE'>('ENG');
+  const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils'>('hero');
+  const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
+  const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string>('');
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  const t = siteContent[lang];
 
   useEffect(() => {
     document.title = t.weddingTitle;
-  }, [lang]);
+  }, [lang, t.weddingTitle]);
+
+  // Fetch dynamic layout site content on mount
+  useEffect(() => {
+    const fetchSiteContent = async () => {
+      try {
+        const docRef = doc(db, 'site_content', 'main');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const mergedEng = { ...translations.ENG, ...(data.ENG || {}) };
+          const mergedVie = { ...translations.VIE, ...(data.VIE || {}) };
+          const loadedContent = { ENG: mergedEng, VIE: mergedVie };
+
+          setSiteContent(loadedContent);
+          setCmsTranslations(loadedContent);
+
+          if (data.imageUrl) {
+            setHeroImageUrl(data.imageUrl);
+            setCmsImageUrl(data.imageUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching site_content from Firestore on load:', err);
+      } finally {
+        setIsContentLoading(false);
+      }
+    };
+    fetchSiteContent();
+  }, []);
 
   // Administrative state managers
   const [isAdminViewActive, setIsAdminViewActive] = useState(false);
@@ -246,6 +294,154 @@ export default function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const updateCmsField = (key: keyof Translations, value: string) => {
+    setCmsTranslations((prev) => ({
+      ...prev,
+      [cmsLang]: {
+        ...prev[cmsLang],
+        [key]: value,
+      },
+    }));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Only image files (.jpg, .png, etc.) are permitted.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed is 5MB.');
+        return;
+      }
+      startUpload(file);
+    }
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Only image files (.jpg, .png, etc.) are permitted.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed is 5MB.');
+        return;
+      }
+      startUpload(file);
+    }
+  };
+
+  const startUpload = (file: File) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const storageRef = ref(storage, `site_assets/couple_portrait_${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+        setUploadProgress(progress);
+      },
+      (error) => {
+        console.error('Storage upload error:', error);
+        alert(`Failed to upload: ${error.message}`);
+        setIsUploading(false);
+      },
+      async () => {
+        try {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          setCmsImageUrl(downloadUrl);
+          setIsUploading(false);
+        } catch (err: any) {
+          console.error('Error getting download URL:', err);
+          alert(`Error getting download URL: ${err.message}`);
+          setIsUploading(false);
+        }
+      }
+    );
+  };
+
+  const handleSaveCmsContent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingContent(true);
+    setSaveStatus('saving');
+    setSaveErrorMessage('');
+
+    try {
+      const docRef = doc(db, 'site_content', 'main');
+      await setDoc(docRef, {
+        ENG: cmsTranslations.ENG,
+        VIE: cmsTranslations.VIE,
+        imageUrl: cmsImageUrl,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Update active live states of the landing page
+      setSiteContent(cmsTranslations);
+      setHeroImageUrl(cmsImageUrl);
+
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 4000);
+    } catch (err: any) {
+      console.error('Error saving site content to Firestore:', err);
+      setSaveStatus('error');
+      setSaveErrorMessage(err.message || 'Write permission has been denied or firestore rules rejected the push.');
+    } finally {
+      setIsSavingContent(false);
+    }
+  };
+
+  const renderTextInput = (label: string, valueKey: keyof Translations, placeholder: string = '') => {
+    return (
+      <div className="flex flex-col gap-1.5 text-left">
+        <label className="text-stone-500 font-sans font-bold text-[10px] tracking-widest uppercase">
+          {label}
+        </label>
+        <input
+          type="text"
+          value={cmsTranslations[cmsLang][valueKey] || ''}
+          placeholder={placeholder}
+          onChange={(e) => updateCmsField(valueKey, e.target.value)}
+          className="w-full px-4 py-3 bg-white border border-earth-dark/15 focus:outline-none focus:border-olive-drab rounded-xl text-sm text-earth-dark font-sans shadow-sm"
+        />
+      </div>
+    );
+  };
+
+  const renderTextAreaInput = (label: string, valueKey: keyof Translations, placeholder: string = '') => {
+    return (
+      <div className="flex flex-col gap-1.5 text-left">
+        <label className="text-stone-500 font-sans font-bold text-[10px] tracking-widest uppercase">
+          {label}
+        </label>
+        <textarea
+          rows={3}
+          value={cmsTranslations[cmsLang][valueKey] || ''}
+          placeholder={placeholder}
+          onChange={(e) => updateCmsField(valueKey, e.target.value)}
+          className="w-full p-4 bg-white border border-earth-dark/15 focus:outline-none focus:border-olive-drab rounded-xl text-sm leading-relaxed text-earth-dark font-serif italic shadow-sm resize-y"
+        />
+      </div>
+    );
   };
 
   const [activeSection, setActiveSection] = useState<'hero' | 'details' | 'story' | 'rsvp'>('hero');
@@ -731,6 +927,32 @@ export default function App() {
               </div>
             </header>
 
+            {/* Sub-navigation Tab Selector */}
+            <div className="flex border-b border-earth-dark/10 mb-8 gap-6">
+              <button
+                type="button"
+                onClick={() => setAdminTab('rsvps')}
+                className={`pb-3 text-xs tracking-[0.2em] font-sans font-bold uppercase cursor-pointer border-b-2 transition-all duration-300 ${
+                  adminTab === 'rsvps'
+                    ? 'border-olive-drab text-[#5E5B52]'
+                    : 'border-transparent text-[#6E6A5F]/60 hover:text-earth-dark font-medium'
+                }`}
+              >
+                Guest Book RSVPs
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('cms')}
+                className={`pb-3 text-xs tracking-[0.2em] font-sans font-bold uppercase cursor-pointer border-b-2 transition-all duration-300 ${
+                  adminTab === 'cms'
+                    ? 'border-olive-drab text-[#5E5B52]'
+                    : 'border-transparent text-[#6E6A5F]/60 hover:text-earth-dark font-medium'
+                }`}
+              >
+                Website Content (CMS)
+              </button>
+            </div>
+
             {/* Error alerts if firebase collection can't load */}
             {fetchingRsvpsError && (
               <div className="mb-8 p-4 bg-red-50 border border-red-200/50 rounded-2xl text-red-700 text-sm font-serif italic text-center">
@@ -739,8 +961,10 @@ export default function App() {
               </div>
             )}
 
-            {/* Summary KPI Grid */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {adminTab === 'rsvps' ? (
+              <>
+                {/* Summary KPI Grid */}
+                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               {/* Card 1: Total registrations */}
               <div className="bg-white/50 backdrop-blur-sm border border-earth-dark/5 rounded-2xl p-6 shadow-xs relative overflow-hidden">
                 <span className="font-sans text-[9px] tracking-[0.25em] text-[#6E6A5F] uppercase block mb-1 font-semibold">
@@ -980,9 +1204,308 @@ export default function App() {
                 </table>
               </div>
             </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+            {/* Left Column: Image Asset Swap / Firebase Storage Section */}
+            <div className="lg:col-span-4 flex flex-col gap-6">
+              <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 shadow-xs text-left">
+                <h2 className="font-serif text-lg font-light text-earth-dark mb-4 pb-2 border-b border-earth-dark/5 select-text">
+                  I. Homepage Portrait Swap
+                </h2>
+                <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed mb-4 select-text">
+                  Update the main featured picture on the landing page of the wedding. Drag-and-drop or choose a new .jpg/.png portrait asset.
+                </p>
+
+                {/* Drag and Drop Zone */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`relative border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] ${
+                    isDragging 
+                      ? 'border-olive-drab bg-olive-light/10 scale-[0.99] shadow-inner' 
+                      : 'border-earth-dark/20 hover:border-olive-drab bg-white/30'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="cms-file-upload"
+                    onChange={handleImageFileChange}
+                    accept="image/*"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    title=""
+                  />
+                  <Smile size={24} className="text-earth-dark/40 mb-3 animate-bounce" />
+                  <span className="font-sans text-xs font-semibold text-earth-dark uppercase tracking-widest block mb-1">
+                    FILE DROP ZONE
+                  </span>
+                  <span className="font-serif text-[11px] text-[#6E6A5F] italic">
+                    Or click to choose image file
+                  </span>
+                </div>
+
+                {/* Upload progress feedback */}
+                {isUploading && (
+                  <div className="mt-4 p-3 bg-stone-100 rounded-xl border border-earth-dark/5">
+                    <div className="flex justify-between items-center text-[10px] font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
+                      <span>Uploading image...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-olive-drab h-full rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview Current Image Block */}
+                <div className="mt-6">
+                  <span className="font-sans text-[9px] tracking-widest text-[#6E6A5F] uppercase block mb-3 font-semibold">
+                    ACTIVE IMAGE PORTRAIT PREVIEW:
+                  </span>
+                  <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.02)] w-full">
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100">
+                      <img 
+                        src={cmsImageUrl} 
+                        alt="CMS Preview Portal" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Web Content Modification Form */}
+            <div className="lg:col-span-8">
+              <form onSubmit={handleSaveCmsContent} className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col gap-6 text-left">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-earth-dark/5 pb-4">
+                  <div>
+                    <h2 className="font-serif text-xl font-light text-earth-dark select-text">
+                      II. Website Text Templates
+                    </h2>
+                    <p className="font-sans text-xs text-[#6E6A5F] mt-0.5 select-text">
+                      Modify frontend static translations in real-time. Select section category below.
+                    </p>
+                  </div>
+
+                  {/* Prominent Auto-Save and Firestore Push Trigger Button */}
+                  <button
+                    type="submit"
+                    disabled={isSavingContent || isUploading}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-olive-drab hover:bg-[#4E4B42] text-white tracking-widest font-sans text-xs font-bold transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-wait shadow-md shrink-0 uppercase active:scale-[0.98]"
+                  >
+                    <Lock size={12} className={isSavingContent ? 'animate-pulse' : ''} />
+                    <span>{isSavingContent ? 'TRANSMITTING...' : 'SAVE & PUSH CHANGES'}</span>
+                  </button>
+                </div>
+
+                {/* Status feedback alerts */}
+                {saveStatus === 'saved' && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200/50 rounded-xl text-emerald-800 text-sm font-serif italic text-center animate-letter-spacing-unfold">
+                    <p className="font-semibold">✓ Site modifications published successful!</p>
+                    <p className="text-[10px] opacity-95 font-sans tracking-wide uppercase mt-1">Changes are now propagated across global Firestore nodes.</p>
+                  </div>
+                )}
+
+                {saveStatus === 'error' && (
+                  <div className="p-4 bg-red-50 border border-red-200/50 rounded-xl text-red-700 text-sm font-serif italic text-center border-dashed">
+                    <p className="font-semibold">✗ Save failed:</p>
+                    <p className="text-xs font-mono mt-1">{saveErrorMessage}</p>
+                  </div>
+                )}
+
+                {/* Language Segment Buttons */}
+                <div className="flex gap-4 items-center">
+                  <span className="text-[10px] tracking-[0.2em] font-sans font-semibold text-earth-accent uppercase">
+                    Edit Copy Language:
+                  </span>
+                  <div className="flex bg-stone-100 p-1 rounded-xl border border-earth-dark/5 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setCmsLang('ENG')}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-sans tracking-wider font-bold transition-all cursor-pointer ${
+                        cmsLang === 'ENG'
+                          ? 'bg-earth-dark text-raw-earth shadow-sm'
+                          : 'text-[#6E6A5F] hover:text-[#3C3A35]'
+                      }`}
+                    >
+                      ENGLISH (ENG)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCmsLang('VIE')}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-sans tracking-wider font-bold transition-all cursor-pointer ${
+                        cmsLang === 'VIE'
+                          ? 'bg-earth-dark text-raw-earth shadow-sm'
+                          : 'text-[#6E6A5F] hover:text-[#3C3A35]'
+                      }`}
+                    >
+                      TIẾNG VIỆT (VIE)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Website parts segment */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cms-section-select-dropdown" className="text-[10px] tracking-[0.2em] font-sans font-semibold text-earth-accent uppercase">
+                    Select Page Section:
+                  </label>
+                  <select
+                    id="cms-section-select-dropdown"
+                    value={cmsSection}
+                    onChange={(e: any) => setCmsSection(e.target.value)}
+                    className="w-full py-3 px-4 bg-white border border-earth-dark/15 focus:outline-none focus:border-olive-drab rounded-xl font-serif text-sm italic cursor-pointer text-earth-dark shadow-sm bg-no-repeat"
+                  >
+                    <option value="hero">Part I // Hero Header &amp; Couple Naming</option>
+                    <option value="details">Part II // Grounds Location &amp; Venue Schedules</option>
+                    <option value="map">Part III // Watercolor Sketch Map Labels</option>
+                    <option value="story">Part IV // Path Taken (Historical Milestones)</option>
+                    <option value="rsvp">Part V // Union registry RSVP Form Elements</option>
+                    <option value="thankyou">Part VI // Attendance Confirmation Toast Screens</option>
+                    <option value="utils">Part VII // Footer &amp; System Navigation Elements</option>
+                  </select>
+                </div>
+
+                {/* Render corresponding form fields based on section selector */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar border-t border-earth-dark/5 pt-4">
+                  {cmsSection === 'hero' && (
+                    <>
+                      <div className="md:col-span-2">{renderTextInput("Wedding Couple Name", "weddingName")}</div>
+                      <div className="md:col-span-2">{renderTextInput("Browser Title", "weddingTitle")}</div>
+                      {renderTextInput("Gathering Header Tag (Intro)", "gatheringHeader")}
+                      {renderTextInput("Gathering Sub (Intro Date Sub)", "gatheringSub")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Hero Vibe Message Description", "heroVibeText")}</div>
+                      {renderTextInput("Wedding Full Date Code", "october")}
+                      {renderTextInput("City / Location State", "portland")}
+                      {renderTextInput("Venue Highlight Subtitle", "wildMeadow")}
+                    </>
+                  )}
+
+                  {cmsSection === 'details' && (
+                    <>
+                      {renderTextInput("Details Roman Tag Highlight", "detailsSectionNum")}
+                      {renderTextInput("Details Title Banner", "detailsTitle")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Details Paragraph Introduction", "detailsDesc")}</div>
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-2" />
+                      {renderTextInput("Ceremony Part Card Title", "theCeremony")}
+                      {renderTextInput("Ceremony Part Details Text", "theCeremonyDesc")}
+                      {renderTextInput("Rehearsal Party Banquet Card Title", "theGathering")}
+                      {renderTextInput("Rehearsal Banquet Details Info", "theGatheringDesc")}
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-2" />
+                      <div className="md:col-span-2">{renderTextInput("Accommodation Guideline tip text link", "accommodationTip")}</div>
+                    </>
+                  )}
+
+                  {cmsSection === 'map' && (
+                    <>
+                      <div className="md:col-span-2">{renderTextInput("Map Interaction Overlay Banner", "interactiveMapBadge")}</div>
+                      {renderTextInput("Map Fork Label Details", "mapSiletzRiver")}
+                      {renderTextInput("Map Route Guard Label Details", "mapForestPass")}
+                      {renderTextInput("Map Point I: Ceremony Pin Title", "mapWestRidgeLabel")}
+                      {renderTextInput("Map Point I: Ceremony Information Subtext", "mapWestRidgeSub")}
+                      {renderTextInput("Map Point II: Gathering Pin Title", "mapGlassBarnLabel")}
+                      {renderTextInput("Map Point II: Gathering Information Subtext", "mapGlassBarnSub")}
+                      <div className="md:col-span-2">{renderTextInput("Directions Navigation URL Map link text", "mapGetDirections")}</div>
+                    </>
+                  )}
+
+                  {cmsSection === 'story' && (
+                    <>
+                      {renderTextInput("Timeline Section Roman Flag", "storySectionNum")}
+                      <div className="md:col-span-2">{renderTextInput("Story Narrative Core Title", "storyTitle")}</div>
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-2" />
+                      {renderTextInput("Milestone 2021: Header Title", "story2021Title")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Milestone 2021: Description Narrative", "story2021Desc")}</div>
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-2" />
+                      {renderTextInput("Milestone 2024: Header Title", "story2024Title")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Milestone 2024: Description Narrative", "story2024Desc")}</div>
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-2" />
+                      {renderTextInput("Milestone 2026: Header Title", "story2026Title")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Milestone 2026: Description Narrative", "story2026Desc")}</div>
+                    </>
+                  )}
+
+                  {cmsSection === 'rsvp' && (
+                    <>
+                      {renderTextInput("Registry Section Roman Flag", "rsvpSectionNum")}
+                      {renderTextInput("RSVP Form Header Title", "rsvpTitle")}
+                      <div className="md:col-span-2">{renderTextInput("RSVP Reply cutoff date", "rsvpReplyBy")}</div>
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-1" />
+                      {renderTextInput("State I - Guest Name Title", "rsvpMyNameIs")}
+                      {renderTextInput("State I - Enter name suggestion placeholder", "rsvpEnterNamePlaceholder")}
+                      {renderTextInput("State II - Attendance Label status indicator", "rsvpUnderPines")}
+                      {renderTextInput("State II - Yes option prompt", "rsvpWillBeThere")}
+                      {renderTextInput("State II - No option prompt", "rsvpRegretfullyDecline")}
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-1" />
+                      <div className="md:col-span-2">{renderTextInput("State III - Custom meal selection container label", "rsvpMealSelectionLabel")}</div>
+                      {renderTextInput("Meal Option 1: Siletz Trout title", "rsvpMealTrout")}
+                      {renderTextInput("Meal Option 2: Pine Alder Heifer title", "rsvpMealBeef")}
+                      {renderTextInput("Meal Option 3: Ash Barley baked title (V)", "rsvpMealBarley")}
+                      {renderTextInput("Meal Option 4: Harvest Pumpkin title (VG)", "rsvpMealGreens")}
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-1" />
+                      {renderTextInput("State IV - Dietary restriction label", "rsvpDietaryLabel")}
+                      {renderTextInput("State IV - Dietary placeholder tips", "rsvpDietaryPlaceholder")}
+                      {renderTextInput("State V - Song prompt label", "rsvpSongLabel")}
+                      {renderTextInput("State V - Song suggestion placeholder", "rsvpSongPlaceholder")}
+                      <div className="md:col-span-2 border-t border-earth-dark/5 pt-4 my-1" />
+                      {renderTextInput("State VI - Blessing greeting box label", "rsvpGreetingLabel")}
+                      <div className="md:col-span-2">{renderTextInput("State VI - Blessing text area placeholder", "rsvpGreetingPlaceholder")}</div>
+                      {renderTextInput("Commit Action Button - Sending label loader", "rsvpTransmitting")}
+                      {renderTextInput("Commit Action Button - Standard execute label", "rsvpCommitEntry")}
+                    </>
+                  )}
+
+                  {cmsSection === 'thankyou' && (
+                    <>
+                      <div className="md:col-span-2">{renderTextInput("Logged Success dialog floating bubble notification", "thankYouEntryLogged")}</div>
+                      {renderTextInput("Success Screen main header text", "thankYouTitle")}
+                      <div className="md:col-span-2">{renderTextAreaInput("Success Screen thank you paragraphs", "thankYouDesc")}</div>
+                      {renderTextInput("Success Meal description title item", "thankYouMealPlatter")}
+                      {renderTextInput("Success Back Button - Sửa đổi thông tin button", "thankYouEditBtn")}
+                      {renderTextInput("Success Back Button - Maps revisit directions link text", "thankYouRevisitDirections")}
+                    </>
+                  )}
+
+                  {cmsSection === 'utils' && (
+                    <>
+                      {renderTextInput("Main Navigation bar: Sound active trigger text", "navSoundOn")}
+                      {renderTextInput("Main Navigation bar: Sound play suggestion text", "navSoundOff")}
+                      {renderTextInput("Sidebar indexes: I. The Date selection labels", "romanNavDate")}
+                      {renderTextInput("Sidebar indexes: II. Details selection labels", "romanNavDetails")}
+                      {renderTextInput("Sidebar indexes: III. Our story selection labels", "romanNavStory")}
+                      {renderTextInput("Sidebar indexes: IV. RSVP registry selection labels", "romanNavRsvp")}
+                      {renderTextInput("Stickies CTA: Floating banner RSVP button text", "stickyRsvpBtn")}
+                      {renderTextInput("Footer general copyrights notes description", "footerUnionText")}
+                      {renderTextInput("Footer guest registry link tag text outline", "footerRegistryLedger")}
+                    </>
+                  )}
+                </div>
+
+                <div className="border-t border-earth-dark/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
+                  <span className="text-[10px] text-neutral-400 italic font-serif">
+                    Pushing changes merges translation dictionaries across database shards instantly.
+                  </span>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingContent || isUploading}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-olive-drab hover:bg-[#4E4B42] text-white tracking-widest font-sans text-xs font-bold transition-all duration-300 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>✓ SAVE &amp; BUILD SITE</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
+      )}
+    </div>
     );
   }
 
@@ -1133,29 +1656,48 @@ export default function App() {
             </span>
           </div>
 
-          {/* Core Title (Names of Couple) */}
+          {/* Core Title (Names of Couple) & Dynamic Image */}
           <div className="my-auto py-12 md:py-16">
-            <h1 className="text-[12vw] sm:text-[8vw] lg:text-[6.5vw] font-serif font-light leading-[1.05] tracking-tight mb-6 select-text">
-              {t.weddingName}
-            </h1>
-            
-            {/* The Vibe Narrative Block */}
-            <p className="max-w-md font-serif text-lg md:text-xl text-earth-accent font-light leading-relaxed mb-8 select-text">
-              {t.heroVibeText}
-            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+              <div className="lg:col-span-7">
+                <h1 className="text-[10vw] sm:text-[7vw] lg:text-[5vw] font-serif font-light leading-[1.05] tracking-tight mb-6 select-text">
+                  {t.weddingName}
+                </h1>
+                
+                {/* The Vibe Narrative Block */}
+                <p className="max-w-md font-serif text-lg md:text-xl text-earth-accent font-light leading-relaxed mb-8 select-text">
+                  {t.heroVibeText}
+                </p>
 
-            <div className="flex flex-col sm:flex-row gap-6 mt-4 font-sans text-[11px] tracking-[0.25em] text-earth-dark/70">
-              <div className="flex items-center gap-3">
-                <span className="text-olive-light">10</span>
-                <span>{t.october}</span>
+                <div className="flex flex-col sm:flex-row gap-6 mt-4 font-sans text-[11px] tracking-[0.25em] text-earth-dark/70">
+                  <div className="flex items-center gap-3">
+                    <span className="text-olive-light">10</span>
+                    <span>{t.october}</span>
+                  </div>
+                  <div className="hidden sm:inline text-earth-dark/20">•</div>
+                  <div className="flex items-center gap-3">
+                    <span>{t.portland}</span>
+                  </div>
+                  <div className="hidden sm:inline text-earth-dark/20">•</div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
+                  </div>
+                </div>
               </div>
-              <div className="hidden sm:inline text-earth-dark/20">•</div>
-              <div className="flex items-center gap-3">
-                <span>{t.portland}</span>
-              </div>
-              <div className="hidden sm:inline text-earth-dark/20">•</div>
-              <div className="flex items-center gap-3">
-                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
+
+              {/* Dynamic Image Canvas Frame */}
+              <div className="lg:col-span-5 flex justify-center">
+                <div className="relative p-2.5 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] group max-w-sm w-full">
+                  <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
+                    <img 
+                      src={heroImageUrl} 
+                      alt="Gia Bao & John Portrait" 
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

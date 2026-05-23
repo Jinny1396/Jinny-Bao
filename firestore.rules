@@ -55,5 +55,10 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
+
+    // Dynamic layout site content collection rules
+    match /site_content/{contentId} {
+      allow read, write: if true;
+    }
   }
 }
