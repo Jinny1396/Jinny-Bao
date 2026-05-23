@@ -1,0 +1,6 @@
+{
+  "name": "Artisanal Wedding Invitation",
+  "description": "An elegant, single-page artisanal luxury wedding invitation with botanical line art, interactive countdown, and a sophisticated RSVP flow.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
