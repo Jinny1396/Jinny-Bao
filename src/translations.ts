@@ -70,6 +70,7 @@ export interface Translations {
   romanNavDetails: string;
   romanNavStory: string;
   romanNavRsvp: string;
+  romanNavDressCode: string;
   stickyRsvpBtn: string;
   // Dress Code additions
   dressCodeSectionNum: string;
@@ -154,6 +155,7 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     romanNavDetails: "THE DETAILS",
     romanNavStory: "OUR STORY",
     romanNavRsvp: "RSVP",
+    romanNavDressCode: "DRESS CODE",
     stickyRsvpBtn: "RSVP",
     // Dress Code ENG
     dressCodeSectionNum: "04 // Suggested Dress Code",
@@ -236,6 +238,7 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     romanNavDetails: "CHI TIẾT LỄ",
     romanNavStory: "CÂU CHUYỆN",
     romanNavRsvp: "XÁC NHẬN",
+    romanNavDressCode: "TRANG PHỤC",
     stickyRsvpBtn: "XÁC NHẬN",
     // Dress Code VIE
     dressCodeSectionNum: "04 // Gợi Ý Trang Phục",

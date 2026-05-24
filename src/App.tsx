@@ -468,7 +468,7 @@ export default function App() {
     );
   };
 
-  const [activeSection, setActiveSection] = useState<'hero' | 'details' | 'story' | 'rsvp'>('hero');
+  const [activeSection, setActiveSection] = useState<'hero' | 'details' | 'story' | 'dress-code' | 'rsvp'>('hero');
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [petals, setPetals] = useState<Petal[]>([]);
@@ -618,7 +618,7 @@ export default function App() {
   // Interaction Intersection Observer to highlight sidebar Roman numerals automatically
   useEffect(() => {
     const handleScroll = () => {
-      const sections = ['hero', 'details', 'story', 'rsvp'] as const;
+      const sections = ['hero', 'details', 'story', 'dress-code', 'rsvp'] as const;
       const scrollPos = window.scrollY + 200;
 
       for (const section of sections) {
@@ -1512,6 +1512,7 @@ export default function App() {
 
                   {cmsSection === 'dresscode' && (
                     <>
+                      {renderTextInput("Navigation Menu Text", "romanNavDressCode")}
                       {renderTextInput("Dress Code Chapter Flag (e.g. 04 // Suggested Dress Code)", "dressCodeSectionNum")}
                       {renderTextInput("Dress Code Title", "dressCodeTitle")}
                       {renderTextInput("Attire Style Label", "dressCodeStyleLabel")}
@@ -1699,10 +1700,19 @@ export default function App() {
         </a>
 
         <a 
+          href="#dress-code" 
+          className={`flex items-center gap-3 transition-all duration-500 group ${activeSection === 'dress-code' ? 'text-earth-dark font-medium' : 'text-earth-dark/40 hover:text-earth-dark'}`}
+        >
+          <span className="font-serif">IV.</span> 
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">{t.romanNavDressCode}</span>
+          <span className={`w-1.5 h-1.5 rounded-full bg-earth-dark transition-transform duration-300 ${activeSection === 'dress-code' ? 'scale-100' : 'scale-0'}`}></span>
+        </a>
+
+        <a 
           href="#rsvp" 
           className={`flex items-center gap-3 transition-all duration-500 group ${activeSection === 'rsvp' ? 'text-earth-dark font-medium' : 'text-earth-dark/40 hover:text-earth-dark'}`}
         >
-          <span className="font-serif">IV.</span> 
+          <span className="font-serif">V.</span> 
           <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">{t.romanNavRsvp}</span>
           <span className={`w-1.5 h-1.5 rounded-full bg-earth-dark transition-transform duration-300 ${activeSection === 'rsvp' ? 'scale-100' : 'scale-0'}`}></span>
         </a>
@@ -2040,7 +2050,7 @@ export default function App() {
 
         {/* SEC III.V: DRESS CODE & PALETTE */}
         <section 
-          id="dresscode" 
+          id="dress-code" 
           className="py-24 border-t border-earth-dark/5 scroll-mt-12 relative text-left"
         >
           <div className="absolute top-10 right-4 lg:right-20 opacity-30 select-none pointer-events-none">
