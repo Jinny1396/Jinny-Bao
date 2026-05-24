@@ -174,6 +174,65 @@ export default function App() {
 
   const t = siteContent[lang];
 
+  // Dynamic procedural map generator based on coordinates / labels
+  const parseCoords = (coordStr: string) => {
+    const matches = coordStr ? coordStr.match(/[-+]?[0-9]*\.?[0-9]+/g) : null;
+    if (matches && matches.length >= 2) {
+      const lat = parseFloat(matches[0]);
+      const lng = parseFloat(matches[1]);
+      return { lat, lng };
+    }
+    return { lat: 45.4192, lng: -122.1824 };
+  };
+
+  const { lat: mapLat, lng: mapLng } = parseCoords(t.mapCoordinates);
+  const mapSeed = (Math.abs(mapLat) * 1000 + Math.abs(mapLng) * 10000) % 99999;
+
+  const getSeededValue = (seed: number, min: number, max: number) => {
+    const x = Math.sin(seed) * 10000;
+    return min + (x - Math.floor(x)) * (max - min);
+  };
+
+  const x1 = getSeededValue(mapSeed + 1, 130, 195);
+  const y1 = getSeededValue(mapSeed + 2, 160, 240);
+
+  const x2 = getSeededValue(mapSeed + 3, 290, 365);
+  const y2 = getSeededValue(mapSeed + 4, 110, 180);
+
+  const riverC1X = getSeededValue(mapSeed + 5, 80, 220);
+  const riverC1Y = getSeededValue(mapSeed + 6, 260, 330);
+  const riverC2X = getSeededValue(mapSeed + 7, 240, 320);
+  const riverC2Y = getSeededValue(mapSeed + 8, 80, 170);
+
+  const riverPath = `M -20,${getSeededValue(mapSeed + 9, 340, 380)} C ${riverC1X},${riverC1Y} ${riverC2X},${riverC2Y} 520,${getSeededValue(mapSeed + 10, 20, 60)}`;
+
+  const roadC1X = getSeededValue(mapSeed + 11, 100, 180);
+  const roadC1Y = getSeededValue(mapSeed + 12, 220, 300);
+  const roadC2X = getSeededValue(mapSeed + 13, 225, 315);
+  const roadC2Y = getSeededValue(mapSeed + 14, 100, 160);
+
+  const roadPath = `M ${getSeededValue(mapSeed + 15, 100, 140)},420 C ${roadC1X},${roadC1Y} ${roadC2X},${roadC2Y} ${getSeededValue(mapSeed + 16, 310, 350)},-20`;
+
+  const path1 = `M ${x1},${y1} Q ${getSeededValue(mapSeed + 17, 200, 280)},${getSeededValue(mapSeed + 18, 140, 210)} ${x2},${y2}`;
+
+  const contours = [
+    `M 10,250 C ${120 + getSeededValue(mapSeed + 19, -40, 40)},${220 + getSeededValue(mapSeed + 20, -30, 30)} 250,300 490,260`,
+    `M 10,120 C ${150 + getSeededValue(mapSeed + 21, -30, 30)},${110 + getSeededValue(mapSeed + 22, -20, 20)} 300,100 490,140`
+  ];
+
+  const pines: {x: number, y: number, scale: number}[] = [];
+  for (let i = 0; i < 7; i++) {
+    const pX = getSeededValue(mapSeed + 100 + i, 30, 475);
+    const pY = getSeededValue(mapSeed + 200 + i, 40, 360);
+    
+    const distL1 = Math.sqrt((pX - x1)**2 + (pY - y1)**2);
+    const distL2 = Math.sqrt((pX - x2)**2 + (pY - y2)**2);
+    const distCompass = Math.sqrt((pX - 55)**2 + (pY - 60)**2);
+    if (distL1 > 55 && distL2 > 55 && distCompass > 65) {
+      pines.push({ x: pX, y: pY, scale: getSeededValue(mapSeed + 300 + i, 0.75, 1.2) });
+    }
+  }
+
   useEffect(() => {
     document.title = t.weddingTitle;
   }, [lang, t.weddingTitle]);
@@ -1387,7 +1446,7 @@ export default function App() {
                   >
                     <option value="hero">Part I // Hero Header &amp; Couple Naming</option>
                     <option value="details">Part II // Grounds Location &amp; Venue Schedules</option>
-                    <option value="map">Part III // Watercolor Sketch Map Labels</option>
+                    <option value="map">Part III // Location/Venue &amp; Watercolor Sketch Map Config</option>
                     <option value="story">Part IV // Path Taken (Historical Milestones)</option>
                     <option value="dresscode">Part VIII // Suggested Dress Code &amp; Color Scheme Palette</option>
                     <option value="rsvp">Part V // Union registry RSVP Form Elements</option>
@@ -1428,14 +1487,31 @@ export default function App() {
 
                   {cmsSection === 'map' && (
                     <>
+                      <div className="md:col-span-2 font-sans text-[10px] tracking-[0.2em] font-semibold text-earth-accent uppercase border-b border-earth-dark/5 pb-2 mb-2">
+                        I. Location &amp; Directions Configuration
+                      </div>
+                      <div className="md:col-span-2">{renderTextInput("Venue Location Coordinates Text", "mapCoordinates")}</div>
+                      <div className="md:col-span-2">{renderTextInput("Google Maps External Redirect URL", "mapGetDirectionsUrl")}</div>
+                      <div className="md:col-span-2">{renderTextInput("Directions Navigation Link Key Title", "mapGetDirections")}</div>
+                      
+                      <div className="md:col-span-2 font-sans text-[10px] tracking-[0.2em] font-semibold text-earth-accent uppercase border-b border-earth-dark/5 pb-2 mt-4 mb-2">
+                        II. Vector Labeling &amp; Map Illustration Marks
+                      </div>
                       <div className="md:col-span-2">{renderTextInput("Map Interaction Overlay Banner", "interactiveMapBadge")}</div>
-                      {renderTextInput("Map Fork Label Details", "mapSiletzRiver")}
-                      {renderTextInput("Map Route Guard Label Details", "mapForestPass")}
-                      {renderTextInput("Map Point I: Ceremony Pin Title", "mapWestRidgeLabel")}
-                      {renderTextInput("Map Point I: Ceremony Information Subtext", "mapWestRidgeSub")}
-                      {renderTextInput("Map Point II: Gathering Pin Title", "mapGlassBarnLabel")}
-                      {renderTextInput("Map Point II: Gathering Information Subtext", "mapGlassBarnSub")}
-                      <div className="md:col-span-2">{renderTextInput("Directions Navigation URL Map link text", "mapGetDirections")}</div>
+                      {renderTextInput("Map River Fork Label", "mapSiletzRiver")}
+                      {renderTextInput("Map Pathway Pass Label", "mapForestPass")}
+                      
+                      <div className="md:col-span-2 font-sans text-[9px] tracking-[0.15em] font-semibold text-earth-dark/60 uppercase mt-2">
+                        III. Floating Callout Point I (Ceremony Pin)
+                      </div>
+                      {renderTextInput("Landmark 1 Label (Title)", "mapWestRidgeLabel")}
+                      {renderTextInput("Landmark 1 Subtext/Timestamp", "mapWestRidgeSub")}
+                      
+                      <div className="md:col-span-2 font-sans text-[9px] tracking-[0.15em] font-semibold text-earth-dark/60 uppercase mt-2">
+                        IV. Floating Callout Point II (Gathering Pin)
+                      </div>
+                      {renderTextInput("Landmark 2 Label (Title)", "mapGlassBarnLabel")}
+                      {renderTextInput("Landmark 2 Subtext/Timestamp", "mapGlassBarnSub")}
                     </>
                   )}
 
@@ -1891,91 +1967,140 @@ export default function App() {
             {/* Stylized Map View SVG Column */}
             <div className="lg:col-span-7 flex flex-col gap-6">
               
-              <div className="relative rounded-2xl border border-earth-dark/10 p-4 md:p-6 bg-raw-earth shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden">
-                <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-1 rounded-full border border-earth-dark/10 bg-raw-earth/80 backdrop-blur-sm text-[9px] tracking-widest font-sans uppercase">
-                  <Compass size={11} className="text-earth-dark/60" />
+              <div id="vector-map-frame" className="relative rounded-2xl border border-earth-dark/15 p-4 md:p-6 bg-[#F3F2EE] shadow-[0_8px_30px_rgb(0,0,0,0.01)] overflow-hidden">
+                <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-1 rounded-full border border-earth-dark/10 bg-[#FAF8F5]/90 backdrop-blur-xs text-[9px] tracking-widest font-sans uppercase">
+                  <Compass size={11} className="text-earth-dark/60 animate-[spin_20s_linear_infinite]" />
                   <span>{t.interactiveMapBadge}</span>
                 </div>
 
-                {/* Hand Drawn Organic Map Vector Design */}
+                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map */}
                 <svg 
                   viewBox="0 0 500 400" 
-                  className="w-full h-auto stroke-earth-dark fill-none stroke-[1.2] rounded-xl"
-                  aria-label="Map illustration of Whispering Meadow Grounds"
+                  className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
+                  aria-label="Scenic hand-drawn grounds map"
                 >
-                  {/* Subtle Background contour lines */}
-                  <path d="M 10,250 C 150,230 250,300 490,260" className="stroke-neutral-300 stroke-[0.8] stroke-dasharray-[4,4]" />
-                  <path d="M 10,120 C 140,150 300,100 490,140" className="stroke-neutral-300 stroke-[0.8]" />
-                  <path d="M 10,50 Q 230,80 490,30" className="stroke-neutral-300 stroke-[0.5]" />
+                  {/* Fine vintage grid lines underneath */}
+                  <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
+                    <line x1="100" y1="0" x2="100" y2="400" />
+                    <line x1="200" y1="0" x2="200" y2="400" />
+                    <line x1="300" y1="0" x2="300" y2="400" />
+                    <line x1="400" y1="0" x2="400" y2="400" />
+                    <line x1="0" y1="100" x2="500" y2="100" />
+                    <line x1="0" y1="200" x2="500" y2="200" />
+                    <line x1="0" y1="300" x2="500" y2="300" />
+                  </g>
+
+                  {/* Contour land wave lines */}
+                  {contours.map((pathStr, index) => (
+                    <path 
+                      key={index} 
+                      d={pathStr} 
+                      className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
+                    />
+                  ))}
                   
-                  {/* The river */}
-                  <path d="M -20,380 C 120,360 210,220 280,180 C 350,140 400,60 520,30" className="stroke-olive-light stroke-[2.2] opacity-40" />
-                  <text x="350" y="85" className="font-serif italic text-[10px] fill-olive-light font-light stroke-none scale-x-[0.95]">{t.mapSiletzRiver}</text>
+                  {/* Organic river fork flowing across */}
+                  <path 
+                    d={riverPath} 
+                    className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
+                  />
+                  <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
+                    <text 
+                      x="0" 
+                      y="0" 
+                      transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
+                      className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
+                    >
+                      {t.mapSiletzRiver}
+                    </text>
+                  </g>
 
-                  {/* Meandering Forest dirt road */}
-                  <path d="M 120,420 C 140,300 80,240 180,190 C 260,150 280,80 340,-20" className="stroke-earth-accent/40 stroke-[1.2] stroke-dasharray-[5,5]" />
-                  <text x="105" y="380" className="font-sans text-[8px] tracking-widest fill-earth-accent/70 font-light stroke-none rotate-[-60deg]">{t.mapForestPass}</text>
+                  {/* Ground pathway - winding/meandering forest pass */}
+                  <path 
+                    d={roadPath} 
+                    className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
+                  />
+                  <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
+                    <text 
+                      x="0" 
+                      y="0" 
+                      transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
+                      className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
+                    >
+                      {t.mapForestPass}
+                    </text>
+                  </g>
 
-                  {/* Beacons and details */}
-                  {/* PIN I: The Western Ridge (Ceremony Location) */}
-                  <g transform="translate(190, 185)">
-                    {/* Ring Pulse 1 */}
-                    <circle cx="0" cy="0" r="14" className="stroke-olive-drab stroke-[1] fill-none animate-[ping_3s_infinite_ease-in-out]" />
-                    <circle cx="0" cy="0" r="4" className="fill-olive-drab stroke-none pulse-dot" />
+                  {/* Secondary light connection path between sites */}
+                  <path 
+                    d={path1} 
+                    className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
+                  />
+
+                  {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
+                  {pines.map((p, idx) => (
+                    <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
+                      <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
+                      <path d="M -3,-1 L 0,-5 L 3,-1" />
+                    </g>
+                  ))}
+
+                  {/* Compass star motif in top left */}
+                  <g transform="translate(55, 65)">
+                    <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
+                    <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
+                    <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
+                    <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
+                    <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
+                  </g>
+
+                  {/* Landmark Pin 1 Callout Card */}
+                  <g transform={`translate(${x1}, ${y1})`}>
+                    <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
+                    <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
                     
-                    {/* Hand drawn custom marker label banner */}
-                    <rect x="12" y="-20" width="138" height="34" rx="4" className="fill-raw-earth/95 stroke-earth-dark/15 stroke-[0.8]" />
-                    <text x="20" y="-8" className="font-sans text-[9px] font-semibold fill-earth-dark stroke-none tracking-wider">{t.mapWestRidgeLabel}</text>
-                    <text x="20" y="4" className="font-serif italic text-[9px] fill-earth-accent/95 stroke-none leading-none">{t.mapWestRidgeSub}</text>
+                    {/* Hover container box */}
+                    <g transform="translate(14, -22)" className="cursor-default">
+                      {/* White-cream callout frame with shadow */}
+                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                      {/* Color marker column bar */}
+                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
+                      
+                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
+                      <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
+                    </g>
                   </g>
 
-                  {/* PIN II: The Glass Barn Reception */}
-                  <g transform="translate(305, 120)">
-                    {/* Ring Pulse 2 */}
-                    <circle cx="0" cy="0" r="14" className="stroke-earth-accent stroke-[1] fill-none animate-[ping_4s_infinite_ease-in-out]" />
-                    <circle cx="0" cy="0" r="4" className="fill-earth-dark stroke-none pulse-dot" />
+                  {/* Landmark Pin 2 Callout Card */}
+                  <g transform={`translate(${x2}, ${y2})`}>
+                    <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
+                    <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
                     
-                    {/* Label banner */}
-                    <rect x="12" y="-12" width="138" height="34" rx="4" className="fill-raw-earth/95 stroke-earth-dark/15 stroke-[0.8]" />
-                    <text x="20" y="0" className="font-sans text-[9px] font-semibold fill-earth-dark stroke-none tracking-wider">{t.mapGlassBarnLabel}</text>
-                    <text x="20" y="12" className="font-serif italic text-[9px] fill-olive-drab stroke-none leading-none">{t.mapGlassBarnSub}</text>
-                  </g>
-
-                  {/* Pines sketches */}
-                  {/* Pine 1 */}
-                  <g transform="translate(60, 160)">
-                    <path d="M 0,20 L 0,-10 L -6,2 L 0,-10 L 6,2" />
-                    <path d="M 0,-10 L -4,-18 L 0,-10 L 4,-18" />
-                  </g>
-                  {/* Pine 2 */}
-                  <g transform="translate(85, 175)">
-                    <path d="M 0,15 L 0,-7 L -4,1 L 0,-7 L 4,1" />
-                  </g>
-                  {/* Pine 3 */}
-                  <g transform="translate(420, 290)">
-                    <path d="M 0,24 L 0,-12 L -7,1 L 0,-12 L 7,1" />
-                    <path d="M 0,-12 L -5,-20 L 0,-12 L 5,-20" />
-                  </g>
-                  {/* Compass star motif */}
-                  <g transform="translate(50, 60)">
-                    <circle cx="0" cy="0" r="15" className="stroke-earth-accent/20" />
-                    <path d="M 0,-18 L 0,18 M -18,0 L 18,0" className="stroke-earth-accent/50" />
-                    <polygon points="0,-12 3,0 0,2 0,-12" className="fill-earth-dark stroke-none" />
-                    <polygon points="0,12 -3,0 0,-2 0,12" className="fill-earth-accent stroke-none" />
-                    <text x="0" y="-22" textAnchor="middle" className="font-sans text-[8px] fill-earth-dark font-medium stroke-none">N</text>
+                    {/* Hover container box */}
+                    <g transform="translate(14, -22)" className="cursor-default">
+                      {/* White-cream callout frame with shadow */}
+                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                      {/* Color marker column bar */}
+                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
+                      
+                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
+                      <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
+                    </g>
                   </g>
                 </svg>
 
-                <div className="mt-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center text-xs text-earth-accent font-light">
-                  <span className="flex items-center gap-2">
+                {/* Bottom Coordinates & Navigation Bar */}
+                <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-xs text-earth-accent font-light">
+                  <span className="flex items-center gap-2 select-text font-serif italic text-neutral-600">
                     <MapPin size={13} className="text-olive-drab shrink-0" />
-                    <span>Latitude: 45.4192° N, Longitude: 122.1824° W</span>
+                    <span>{t.mapCoordinates}</span>
                   </span>
+                  
                   <a 
-                    href="https://maps.google.com" 
+                    href={t.mapGetDirectionsUrl} 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="inline-flex items-center gap-1.5 underline underline-offset-4 hover:text-earth-dark font-medium font-sans tracking-wide text-[10px] uppercase"
+                    className="inline-flex items-center gap-1.5 underline underline-offset-4 hover:text-earth-dark font-medium font-sans tracking-widest text-[10px] uppercase transition-colors"
                   >
                     <span>{t.mapGetDirections}</span>
                     <ArrowRight size={10} />

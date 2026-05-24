@@ -27,6 +27,8 @@ export interface Translations {
   mapGlassBarnLabel: string;
   mapGlassBarnSub: string;
   mapGetDirections: string;
+  mapCoordinates: string;
+  mapGetDirectionsUrl: string;
   storySectionNum: string;
   storyTitle: string;
   story2021Title: string;
@@ -112,6 +114,8 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     mapGlassBarnLabel: "II. THE GLASS BARN",
     mapGlassBarnSub: "Feast & Hearth — 5:30 PM",
     mapGetDirections: "Get Directions",
+    mapCoordinates: "Latitude: 45.4192° N, Longitude: 122.1824° W",
+    mapGetDirectionsUrl: "https://maps.google.com",
     storySectionNum: "03 // The Path Taken",
     storyTitle: "A commitment born under open sky, carried by the seasons.",
     story2021Title: "The Whispering Meadow",
@@ -195,6 +199,8 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     mapGlassBarnLabel: "II. THE GLASS BARN",
     mapGlassBarnSub: "Tiệc & Sum Họp — 5:30 Chiều",
     mapGetDirections: "Chỉ Đường Trên Google",
+    mapCoordinates: "Vĩ độ: 45.4192° N, Kinh độ: 122.1824° W",
+    mapGetDirectionsUrl: "https://maps.google.com",
     storySectionNum: "03 // Con Đường Đã Qua",
     storyTitle: "Lời hẹn ước đơm hoa dưới bầu trời tự do, nuôi dưỡng qua từng mùa.",
     story2021Title: "Cánh Đồng Thì Thầm",
