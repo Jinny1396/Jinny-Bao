@@ -27,28 +27,36 @@ import {
   Filter
 } from 'lucide-react';
 import { db, storage, handleFirestoreError, OperationType } from './firebase';
-import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
 
-// Helper to resolve Google Drive URLs to native lh3.googleusercontent.com/d/ID direct load links
-const getDirectImageUrl = (url: string): string => {
+// Helper to resolve Google Drive URLs to native direct load links
+const getDirectImageUrl = (url: string, appendCacheBust = false): string => {
   if (!url) return '';
+  
+  let formatted = url;
   
   // Google Drive file ID pattern
   const driveIdPattern = /\/file\/d\/([a-zA-Z0-9_-]+)/;
   const driveIdMatch = url.match(driveIdPattern);
-  if (driveIdMatch && driveIdMatch[1]) {
-    return `https://lh3.googleusercontent.com/d/${driveIdMatch[1]}`;
-  }
   
   const driveQueryPattern = /[?&]id=([a-zA-Z0-9_-]+)/;
   const driveQueryMatch = url.match(driveQueryPattern);
-  if (driveQueryMatch && driveQueryMatch[1]) {
-    return `https://lh3.googleusercontent.com/d/${driveQueryMatch[1]}`;
+  
+  const fileId = (driveIdMatch && driveIdMatch[1]) || (driveQueryMatch && driveQueryMatch[1]);
+  
+  if (fileId) {
+    // Transform into a direct export web link per instructions
+    formatted = `https://drive.google.com/uc?export=download&id=${fileId}`;
   }
   
-  return url;
+  if (appendCacheBust && formatted && !formatted.startsWith('data:') && !formatted.startsWith('/')) {
+    const separator = formatted.includes('?') ? '&' : '?';
+    formatted = `${formatted}${separator}v=${Date.now()}`;
+  }
+  
+  return formatted;
 };
 
 // Polished reusable image wrapper component with fallback, skeleton, and elegant fade-in transition
@@ -72,7 +80,7 @@ const CdnImage: React.FC<CdnImageProps> = ({ src, fallbackSrc, className, alt, .
       return;
     }
 
-    const formatted = getDirectImageUrl(src);
+    const formatted = getDirectImageUrl(src, true);
     setImgSrc(formatted);
     setStatus('loading');
   }, [src, fallbackSrc]);
@@ -250,7 +258,7 @@ export default function App() {
     if (!heroImageUrl) return;
     setIsHeroLoaded(false);
     const img = new Image();
-    img.src = getDirectImageUrl(heroImageUrl);
+    img.src = getDirectImageUrl(heroImageUrl, true);
     img.onload = () => setIsHeroLoaded(true);
     img.onerror = () => setIsHeroLoaded(true);
   }, [heroImageUrl]);
@@ -346,12 +354,12 @@ export default function App() {
     document.title = t.weddingTitle;
   }, [lang, t.weddingTitle]);
 
-  // Fetch dynamic layout site content on mount
+  // Load and listen to dynamic layout site content in real-time
   useEffect(() => {
-    const fetchSiteContent = async () => {
+    const docRef = doc(db, 'site_content', 'main');
+    
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
       try {
-        const docRef = doc(db, 'site_content', 'main');
-        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           const mergedEng = { ...translations.ENG, ...(data.ENG || {}) };
@@ -377,7 +385,7 @@ export default function App() {
             setDressCodeImageUrl(data.dressCodeImageUrl);
             setCmsDressCodeImageUrl(data.dressCodeImageUrl);
           }
-          if (data.mapImageUrl) {
+          if (data.mapImageUrl !== undefined) {
             setMapImageUrl(data.mapImageUrl);
             setCmsMapImageUrl(data.mapImageUrl);
           }
@@ -391,12 +399,16 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Error fetching site_content from Firestore on load:', err);
+        console.error('Error listening to site_content real-time updates:', err);
       } finally {
         setIsContentLoading(false);
       }
-    };
-    fetchSiteContent();
+    }, (error) => {
+      console.error('Firestore onSnapshot listener error:', error);
+      setIsContentLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Administrative state managers
@@ -2268,7 +2280,7 @@ export default function App() {
         <div 
           className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ease-out ${isHeroLoaded ? 'opacity-100' : 'opacity-0'}`}
           style={{ 
-            backgroundImage: `url(${getDirectImageUrl(heroImageUrl)})`,
+            backgroundImage: `url(${getDirectImageUrl(heroImageUrl, true)})`,
             backgroundAttachment: 'fixed'
           }}
         />
