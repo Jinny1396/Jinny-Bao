@@ -24,11 +24,12 @@ import {
   Download,
   LogOut,
   Search,
-  Filter
+  Filter,
+  Upload,
+  Image
 } from 'lucide-react';
-import { db, storage, handleFirestoreError, OperationType } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
@@ -128,6 +129,174 @@ interface Petal {
   speedX: number;
   scale: number;
 }
+
+interface ImageDropZoneProps {
+  title: string;
+  description: string;
+  currentValue: string;
+  fallbackValue: string;
+  targetKey: 'hero' | 'left' | 'right' | 'dress' | 'map';
+  isUploading: boolean;
+  uploadProgress: number;
+  activeUploadTarget: string;
+  onFileSelect: (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map') => void;
+  onReset: (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => void;
+}
+
+const ImageDropZone: React.FC<ImageDropZoneProps> = ({
+  title,
+  description,
+  currentValue,
+  fallbackValue,
+  targetKey,
+  isUploading,
+  uploadProgress,
+  activeUploadTarget,
+  onFileSelect,
+  onReset,
+}) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Only image files (.jpg, .png, .jpeg) are permitted.');
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed is 8MB.');
+        return;
+      }
+      onFileSelect(file, targetKey);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Only image files (.jpg, .png, .jpeg) are permitted.');
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed is 8MB.');
+        return;
+      }
+      onFileSelect(file, targetKey);
+    }
+  };
+
+  const isCurrentTargetUploading = isUploading && activeUploadTarget === targetKey;
+  // If currentValue is empty string or default fallback URL is active
+  const imageToShow = currentValue || fallbackValue;
+
+  return (
+    <div 
+      className={`border-2 rounded-2xl p-4 transition-all duration-300 relative flex flex-col justify-between h-full bg-white/40 ${
+        isDragOver 
+          ? 'border-olive-drab bg-olive-light/10 shadow-md scale-[1.01]' 
+          : 'border-dashed border-earth-dark/20 hover:border-earth-dark/40 hover:bg-white/60'
+      }`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        accept="image/*" 
+        className="hidden" 
+      />
+      
+      <div className="select-text mb-4">
+        <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+          {title}
+        </span>
+        <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed">
+          {description}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {/* Interactive Drop Area / Preview */}
+        <div 
+          onClick={() => fileInputRef.current?.click()}
+          className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-stone-100 border border-neutral-200/50 cursor-pointer shadow-sm transition-all duration-300 hover:shadow-md flex flex-col items-center justify-center min-h-[140px]"
+        >
+          {isCurrentTargetUploading ? (
+            <div className="absolute inset-x-0 inset-y-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center p-3 z-10">
+              <RefreshCw className="w-6 h-6 text-olive-drab animate-spin mb-2" />
+              <div className="text-xs font-sans font-bold text-earth-dark">{uploadProgress}%</div>
+              <div className="text-[10px] text-stone-500 uppercase tracking-widest mt-1">Encoding Base64...</div>
+            </div>
+          ) : null}
+
+          {imageToShow ? (
+            <>
+              <img 
+                src={imageToShow} 
+                alt={title} 
+                className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105" 
+                referrerPolicy="no-referrer" 
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-sm border border-earth-dark/10 flex items-center gap-1.5 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                  <Upload className="w-3.5 h-3.5 text-olive-drab" />
+                  <span className="text-[10px] font-bold tracking-wider uppercase font-sans text-earth-dark">Replace Image</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-4 text-center">
+              <Image className="w-8 h-8 text-neutral-400 mb-2 stroke-[1.5]" />
+              <span className="text-[11px] text-stone-500 font-serif italic mb-1">No custom illustration</span>
+              <span className="text-[9px] tracking-wider uppercase font-sans text-olive-drab font-semibold bg-olive-light/10 px-2 py-0.5 rounded">Fallback Active</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex gap-2 w-full mt-1">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 text-[10px] font-sans font-bold tracking-widest bg-olive-drab text-white hover:bg-[#4E4D45] py-2 px-3 rounded-lg shadow-xs uppercase transition-all duration-200 hover:shadow-sm"
+          >
+            Choose File
+          </button>
+          
+          {currentValue && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReset(targetKey);
+              }}
+              className="text-[10px] font-sans font-bold tracking-widest border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 py-2 px-3 rounded-lg uppercase transition-all duration-200"
+              title="Reset to fallback local image"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [lang, setLang] = useState<'ENG' | 'VIE'>(() => {
@@ -261,25 +430,49 @@ export default function App() {
           setSiteContent(loadedContent);
           setCmsTranslations(loadedContent);
 
-          if (data.imageUrl) {
-            setHeroImageUrl(data.imageUrl);
-            setCmsImageUrl(data.imageUrl);
+          const heroImg = data.imageUrl || data.heroBg;
+          if (heroImg) {
+            setHeroImageUrl(heroImg);
+            setCmsImageUrl(heroImg);
+          } else {
+            setHeroImageUrl('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+            setCmsImageUrl('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
           }
-          if (data.leftPortraitUrl) {
-            setLeftPortraitUrl(data.leftPortraitUrl);
-            setCmsLeftPortraitUrl(data.leftPortraitUrl);
+
+          const leftImg = data.leftPortraitUrl || data.dateLeftPhoto;
+          if (leftImg) {
+            setLeftPortraitUrl(leftImg);
+            setCmsLeftPortraitUrl(leftImg);
+          } else {
+            setLeftPortraitUrl('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+            setCmsLeftPortraitUrl('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
           }
-          if (data.rightPortraitUrl) {
-            setRightPortraitUrl(data.rightPortraitUrl);
-            setCmsRightPortraitUrl(data.rightPortraitUrl);
+
+          const rightImg = data.rightPortraitUrl || data.dateRightPhoto;
+          if (rightImg) {
+            setRightPortraitUrl(rightImg);
+            setCmsRightPortraitUrl(rightImg);
+          } else {
+            setRightPortraitUrl('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
+            setCmsRightPortraitUrl('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
           }
-          if (data.dressCodeImageUrl) {
-            setDressCodeImageUrl(data.dressCodeImageUrl);
-            setCmsDressCodeImageUrl(data.dressCodeImageUrl);
+
+          const dressImg = data.dressCodeImageUrl || data.dressCodeStyleGraphic;
+          if (dressImg) {
+            setDressCodeImageUrl(dressImg);
+            setCmsDressCodeImageUrl(dressImg);
+          } else {
+            setDressCodeImageUrl('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
+            setCmsDressCodeImageUrl('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
           }
-          if (data.mapImageUrl) {
-            setMapImageUrl(data.mapImageUrl);
-            setCmsMapImageUrl(data.mapImageUrl);
+
+          const mapImg = data.mapImageUrl || data.venueMapSketchGraphic;
+          if (mapImg) {
+            setMapImageUrl(mapImg);
+            setCmsMapImageUrl(mapImg);
+          } else {
+            setMapImageUrl('');
+            setCmsMapImageUrl('');
           }
 
           if (data.paletteColors && Array.isArray(data.paletteColors)) {
@@ -459,58 +652,145 @@ export default function App() {
     setActiveUploadTarget(target);
     setUploadProgress(0);
 
-    const storageRef = ref(storage, `site_assets/${target}_portrait_${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    const reader = new FileReader();
 
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-        setUploadProgress(progress);
-      },
-      (error) => {
-        console.error('Storage upload error:', error);
-        alert(`Failed to upload: ${error.message}`);
-        setIsUploading(false);
-      },
-      async () => {
-        try {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+    reader.onloadstart = () => {
+      setUploadProgress(15);
+    };
 
-          // Overwrite immediately in Firestore with merge support
-          let fieldKey = 'imageUrl';
-          if (target === 'left') fieldKey = 'leftPortraitUrl';
-          else if (target === 'right') fieldKey = 'rightPortraitUrl';
-          else if (target === 'dress') fieldKey = 'dressCodeImageUrl';
-          else if (target === 'map') fieldKey = 'mapImageUrl';
-
-          const docRef = doc(db, 'site_content', 'main');
-          await setDoc(docRef, { [fieldKey]: downloadUrl }, { merge: true });
-
-          if (target === 'hero') {
-            setCmsImageUrl(downloadUrl);
-            setHeroImageUrl(downloadUrl);
-          } else if (target === 'left') {
-            setCmsLeftPortraitUrl(downloadUrl);
-            setLeftPortraitUrl(downloadUrl);
-          } else if (target === 'right') {
-            setCmsRightPortraitUrl(downloadUrl);
-            setRightPortraitUrl(downloadUrl);
-          } else if (target === 'dress') {
-            setCmsDressCodeImageUrl(downloadUrl);
-            setDressCodeImageUrl(downloadUrl);
-          } else if (target === 'map') {
-            setCmsMapImageUrl(downloadUrl);
-            setMapImageUrl(downloadUrl);
-          }
-          setIsUploading(false);
-        } catch (err: any) {
-          console.error('Error getting download URL:', err);
-          alert(`Error getting download URL: ${err.message}`);
-          setIsUploading(false);
-        }
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 50);
+        setUploadProgress(15 + percent);
       }
-    );
+    };
+
+    reader.onload = async () => {
+      try {
+        setUploadProgress(70);
+        const base64String = reader.result as string;
+
+        let fieldKey = 'imageUrl';
+        let customKey = 'heroBg';
+        if (target === 'left') {
+          fieldKey = 'leftPortraitUrl';
+          customKey = 'dateLeftPhoto';
+        } else if (target === 'right') {
+          fieldKey = 'rightPortraitUrl';
+          customKey = 'dateRightPhoto';
+        } else if (target === 'dress') {
+          fieldKey = 'dressCodeImageUrl';
+          customKey = 'dressCodeStyleGraphic';
+        } else if (target === 'map') {
+          fieldKey = 'mapImageUrl';
+          customKey = 'venueMapSketchGraphic';
+        }
+
+        setUploadProgress(85);
+
+        // Overwrite immediately in Firestore with merge support
+        const docRef = doc(db, 'site_content', 'main');
+        await setDoc(docRef, { 
+          [fieldKey]: base64String,
+          [customKey]: base64String 
+        }, { merge: true });
+
+        if (target === 'hero') {
+          setCmsImageUrl(base64String);
+          setHeroImageUrl(base64String);
+        } else if (target === 'left') {
+          setCmsLeftPortraitUrl(base64String);
+          setLeftPortraitUrl(base64String);
+        } else if (target === 'right') {
+          setCmsRightPortraitUrl(base64String);
+          setRightPortraitUrl(base64String);
+        } else if (target === 'dress') {
+          setCmsDressCodeImageUrl(base64String);
+          setDressCodeImageUrl(base64String);
+        } else if (target === 'map') {
+          setCmsMapImageUrl(base64String);
+          setMapImageUrl(base64String);
+        }
+        
+        setUploadProgress(100);
+        setTimeout(() => {
+          setIsUploading(false);
+          setUploadProgress(0);
+        }, 300);
+
+      } catch (err: any) {
+        console.error('Error saving image text to Firestore:', err);
+        alert(`Error saving image: ${err.message || err}`);
+        setIsUploading(false);
+      }
+    };
+
+    reader.onerror = (err) => {
+      console.error('File reader error:', err);
+      alert('Failed to read local file.');
+      setIsUploading(false);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetImage = async (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => {
+    if (!window.confirm("Are you sure you want to revert to the default/fallback image asset?")) {
+      return;
+    }
+
+    let fieldKey = 'imageUrl';
+    let customKey = 'heroBg';
+    let defaultVal = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200';
+    if (target === 'left') {
+      fieldKey = 'leftPortraitUrl';
+      customKey = 'dateLeftPhoto';
+      defaultVal = 'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600';
+    } else if (target === 'right') {
+      fieldKey = 'rightPortraitUrl';
+      customKey = 'dateRightPhoto';
+      defaultVal = 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600';
+    } else if (target === 'dress') {
+      fieldKey = 'dressCodeImageUrl';
+      customKey = 'dressCodeStyleGraphic';
+      defaultVal = 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600';
+    } else if (target === 'map') {
+      fieldKey = 'mapImageUrl';
+      customKey = 'venueMapSketchGraphic';
+      defaultVal = '';
+    }
+
+    try {
+      setIsSavingContent(true);
+      const docRef = doc(db, 'site_content', 'main');
+      await setDoc(docRef, { 
+        [fieldKey]: '',
+        [customKey]: ''
+      }, { merge: true });
+
+      if (target === 'hero') {
+        setCmsImageUrl('');
+        setHeroImageUrl(defaultVal);
+      } else if (target === 'left') {
+        setCmsLeftPortraitUrl('');
+        setLeftPortraitUrl(defaultVal);
+      } else if (target === 'right') {
+        setCmsRightPortraitUrl('');
+        setRightPortraitUrl(defaultVal);
+      } else if (target === 'dress') {
+        setCmsDressCodeImageUrl('');
+        setDressCodeImageUrl(defaultVal);
+      } else if (target === 'map') {
+        setCmsMapImageUrl('');
+        setMapImageUrl('');
+      }
+
+      setIsSavingContent(false);
+    } catch (err: any) {
+      console.error('Error resetting image:', err);
+      alert(`Error resetting image: ${err.message || err}`);
+      setIsSavingContent(false);
+    }
   };
 
   const handleSaveCmsContent = async (e: React.FormEvent) => {
@@ -525,10 +805,15 @@ export default function App() {
         ENG: cmsTranslations.ENG,
         VIE: cmsTranslations.VIE,
         imageUrl: cmsImageUrl,
+        heroBg: cmsImageUrl,
         leftPortraitUrl: cmsLeftPortraitUrl,
+        dateLeftPhoto: cmsLeftPortraitUrl,
         rightPortraitUrl: cmsRightPortraitUrl,
+        dateRightPhoto: cmsRightPortraitUrl,
         dressCodeImageUrl: cmsDressCodeImageUrl,
+        dressCodeStyleGraphic: cmsDressCodeImageUrl,
         mapImageUrl: cmsMapImageUrl,
+        venueMapSketchGraphic: cmsMapImageUrl,
         paletteColors: cmsPaletteColors,
         updatedAt: new Date().toISOString(),
       });
@@ -1673,185 +1958,80 @@ export default function App() {
                   <span>🖼️ Global Image Assets Registry</span>
                 </h2>
                 <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
-                  All image inputs utilize direct Cloud integration. Uploading instantly stores artifacts securely in Firebase Storage, generates a permanent signature link, and overwrites the active site property inside document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-olive-drab">site_content/main</code>. Live previews will render immediately.
+                  All image management slots here support direct drag-and-drop file ingestion. When you drop an image (or tap to choose a local file), the file is read instantly via JavaScript's <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-olive-drab">FileReader</code> and stored as a Base64 data URL string directly inside the corresponding field inside Firestore document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-neutral-800">site_content/main</code>. This removes all external cloud storage dependencies. Live previews will render immediately.
                 </p>
               </div>
 
-              {/* Active Global Progress Indicator inside the workspace */}
-              {isUploading && (
-                <div className="p-4 mb-6 bg-olive-light/10 rounded-xl border border-olive-light/25 animate-pulse">
-                  <div className="flex justify-between items-center text-xs font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
-                    <span>
-                      Uploading to{' '}
-                      {activeUploadTarget === 'hero' ? 'Hero Fullscreen Background Photo' : 
-                       activeUploadTarget === 'right' ? 'Top-Right Staggered Portrait' : 
-                       activeUploadTarget === 'left' ? 'Bottom-Left Staggered Portrait' : 
-                       activeUploadTarget === 'dress' ? 'Dress Code Palette Visuals' : 
-                       'Venue Map Illustration Graphic'}...
-                    </span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-stone-200/60 h-2 rounded-full overflow-hidden">
-                    <div className="bg-olive-drab h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Card 1: Hero Cover Photo */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 1: Hero Fullscreen Background Photo
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      The prominent welcome photo supporting clean text styling at the bottom edge of the folding fold.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[16/9] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
-                      <img src={cmsImageUrl} alt="Hero Fullscreen" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'hero');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
+                {/* Slot 1: Hero Banner Background Image */}
+                <ImageDropZone
+                  title="Hero Banner Background Image"
+                  description="The prominent fullscreen welcome photo supporting clean text styling at the bottom edge of the folding fold."
+                  currentValue={cmsImageUrl}
+                  fallbackValue="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200"
+                  targetKey="hero"
+                  isUploading={isUploading}
+                  uploadProgress={uploadProgress}
+                  activeUploadTarget={activeUploadTarget}
+                  onFileSelect={startUpload}
+                  onReset={handleResetImage}
+                />
 
-                {/* Card 2: Top-Right Staggered Portrait */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 2: Top-Right Staggered Portrait
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
-                      <img src={cmsRightPortraitUrl} alt="Top-Right Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'right');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
+                {/* Slot 2: The Date Section - Left Floating Portrait */}
+                <ImageDropZone
+                  title="The Date Section - Left Floating Portrait"
+                  description="Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area."
+                  currentValue={cmsLeftPortraitUrl}
+                  fallbackValue="https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600"
+                  targetKey="left"
+                  isUploading={isUploading}
+                  uploadProgress={uploadProgress}
+                  activeUploadTarget={activeUploadTarget}
+                  onFileSelect={startUpload}
+                  onReset={handleResetImage}
+                />
 
-                {/* Card 3: Bottom-Left Staggered Portrait */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 3: Bottom-Left Staggered Portrait
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
-                      <img src={cmsLeftPortraitUrl} alt="Bottom-Left Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'left');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
+                {/* Slot 3: The Date Section - Right Floating Portrait */}
+                <ImageDropZone
+                  title="The Date Section - Right Floating Portrait"
+                  description="Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block."
+                  currentValue={cmsRightPortraitUrl}
+                  fallbackValue="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600"
+                  targetKey="right"
+                  isUploading={isUploading}
+                  uploadProgress={uploadProgress}
+                  activeUploadTarget={activeUploadTarget}
+                  onFileSelect={startUpload}
+                  onReset={handleResetImage}
+                />
 
-                {/* Card 4: Dress Code Palette Visuals */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 4: Dress Code Color Palette Visuals / Images
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
-                      <img src={cmsDressCodeImageUrl} alt="Dress Code Inspiration" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'dress');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
+                {/* Slot 4: Dress Code Style Graphic */}
+                <ImageDropZone
+                  title="Dress Code Style Graphic"
+                  description="Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches."
+                  currentValue={cmsDressCodeImageUrl}
+                  fallbackValue="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600"
+                  targetKey="dress"
+                  isUploading={isUploading}
+                  uploadProgress={uploadProgress}
+                  activeUploadTarget={activeUploadTarget}
+                  onFileSelect={startUpload}
+                  onReset={handleResetImage}
+                />
 
-                {/* Card 5: Venue Map Illustration */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 5: Venue Map Illustration Graphic
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow flex items-center justify-center">
-                      {cmsMapImageUrl ? (
-                        <img src={cmsMapImageUrl} alt="Venue Map Override" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="text-center p-4">
-                          <span className="block text-xs text-neutral-400 font-serif italic mb-1">No custom illustration</span>
-                          <span className="text-[9px] tracking-wider uppercase font-sans text-olive-drab font-semibold bg-olive-light/10 px-2 py-0.5 rounded">Active: Fallback SVG Map</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) startUpload(file, 'map');
-                        }}
-                        className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                      />
-                      {cmsMapImageUrl && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (window.confirm("Are you sure you want to revert to the custom interactive SVG map?")) {
-                              setCmsMapImageUrl('');
-                              setMapImageUrl('');
-                              const docRef = doc(db, 'site_content', 'main');
-                              await setDoc(docRef, { mapImageUrl: '' }, { merge: true });
-                            }
-                          }}
-                          className="text-[9px] font-sans font-bold tracking-widest text-red-700 hover:text-red-900 border border-red-200 bg-red-50 py-1 px-2 rounded hover:bg-red-100 uppercase transition-all duration-200"
-                        >
-                          ✕ Clear Custom & Restore Local SVG
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {/* Slot 5: Venue Map Sketch Graphic */}
+                <ImageDropZone
+                  title="Venue Map Sketch Graphic"
+                  description="Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map."
+                  currentValue={cmsMapImageUrl}
+                  fallbackValue=""
+                  targetKey="map"
+                  isUploading={isUploading}
+                  uploadProgress={uploadProgress}
+                  activeUploadTarget={activeUploadTarget}
+                  onFileSelect={startUpload}
+                  onReset={handleResetImage}
+                />
               </div>
 
               {/* Future Architectural Guardrail box */}
@@ -2205,121 +2385,132 @@ export default function App() {
                   <span>{t.interactiveMapBadge}</span>
                 </div>
 
-                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map */}
-                <svg 
-                  viewBox="0 0 500 400" 
-                  className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
-                  aria-label="Scenic hand-drawn grounds map"
-                >
-                  {/* Fine vintage grid lines underneath */}
-                  <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
-                    <line x1="100" y1="0" x2="100" y2="400" />
-                    <line x1="200" y1="0" x2="200" y2="400" />
-                    <line x1="300" y1="0" x2="300" y2="400" />
-                    <line x1="400" y1="0" x2="400" y2="400" />
-                    <line x1="0" y1="100" x2="500" y2="100" />
-                    <line x1="0" y1="200" x2="500" y2="200" />
-                    <line x1="0" y1="300" x2="500" y2="300" />
-                  </g>
-
-                  {/* Contour land wave lines */}
-                  {contours.map((pathStr, index) => (
-                    <path 
-                      key={index} 
-                      d={pathStr} 
-                      className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
+                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map or Image Override */}
+                {mapImageUrl ? (
+                  <div className="w-full aspect-[5/4] rounded-xl overflow-hidden bg-stone-100 hover:shadow-inner transition-shadow duration-300">
+                    <img 
+                      src={mapImageUrl} 
+                      alt="Scenic hand-drawn grounds map" 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
                     />
-                  ))}
-                  
-                  {/* Organic river fork flowing across */}
-                  <path 
-                    d={riverPath} 
-                    className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
-                  />
-                  <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
-                    <text 
-                      x="0" 
-                      y="0" 
-                      transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
-                      className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
-                    >
-                      {t.mapSiletzRiver}
-                    </text>
-                  </g>
-
-                  {/* Ground pathway - winding/meandering forest pass */}
-                  <path 
-                    d={roadPath} 
-                    className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
-                  />
-                  <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
-                    <text 
-                      x="0" 
-                      y="0" 
-                      transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
-                      className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
-                    >
-                      {t.mapForestPass}
-                    </text>
-                  </g>
-
-                  {/* Secondary light connection path between sites */}
-                  <path 
-                    d={path1} 
-                    className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
-                  />
-
-                  {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
-                  {pines.map((p, idx) => (
-                    <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
-                      <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
-                      <path d="M -3,-1 L 0,-5 L 3,-1" />
+                  </div>
+                ) : (
+                  <svg 
+                    viewBox="0 0 500 400" 
+                    className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
+                    aria-label="Scenic hand-drawn grounds map"
+                  >
+                    {/* Fine vintage grid lines underneath */}
+                    <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
+                      <line x1="100" y1="0" x2="100" y2="400" />
+                      <line x1="200" y1="0" x2="200" y2="400" />
+                      <line x1="300" y1="0" x2="300" y2="400" />
+                      <line x1="400" y1="0" x2="400" y2="400" />
+                      <line x1="0" y1="100" x2="500" y2="100" />
+                      <line x1="0" y1="200" x2="500" y2="200" />
+                      <line x1="0" y1="300" x2="500" y2="300" />
                     </g>
-                  ))}
 
-                  {/* Compass star motif in top left */}
-                  <g transform="translate(55, 65)">
-                    <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
-                    <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
-                    <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
-                    <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
-                    <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
-                  </g>
-
-                  {/* Landmark Pin 1 Callout Card */}
-                  <g transform={`translate(${x1}, ${y1})`}>
-                    <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
-                    <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
+                    {/* Contour land wave lines */}
+                    {contours.map((pathStr, index) => (
+                      <path 
+                        key={index} 
+                        d={pathStr} 
+                        className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
+                      />
+                    ))}
                     
-                    {/* Hover container box */}
-                    <g transform="translate(14, -22)" className="cursor-default">
-                      {/* White-cream callout frame with shadow */}
-                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
-                      {/* Color marker column bar */}
-                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
-                      
-                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
-                      <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
+                    {/* Organic river fork flowing across */}
+                    <path 
+                      d={riverPath} 
+                      className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
+                    />
+                    <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
+                      <text 
+                        x="0" 
+                        y="0" 
+                        transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
+                        className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
+                      >
+                        {t.mapSiletzRiver}
+                      </text>
                     </g>
-                  </g>
 
-                  {/* Landmark Pin 2 Callout Card */}
-                  <g transform={`translate(${x2}, ${y2})`}>
-                    <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
-                    <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
-                    
-                    {/* Hover container box */}
-                    <g transform="translate(14, -22)" className="cursor-default">
-                      {/* White-cream callout frame with shadow */}
-                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
-                      {/* Color marker column bar */}
-                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
-                      
-                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
-                      <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
+                    {/* Ground pathway - winding/meandering forest pass */}
+                    <path 
+                      d={roadPath} 
+                      className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
+                    />
+                    <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
+                      <text 
+                        x="0" 
+                        y="0" 
+                        transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
+                        className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
+                      >
+                        {t.mapForestPass}
+                      </text>
                     </g>
-                  </g>
-                </svg>
+
+                    {/* Secondary light connection path between sites */}
+                    <path 
+                      d={path1} 
+                      className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
+                    />
+
+                    {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
+                    {pines.map((p, idx) => (
+                      <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
+                        <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
+                        <path d="M -3,-1 L 0,-5 L 3,-1" />
+                      </g>
+                    ))}
+
+                    {/* Compass star motif in top left */}
+                    <g transform="translate(55, 65)">
+                      <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
+                      <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
+                      <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
+                      <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
+                      <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
+                    </g>
+
+                    {/* Landmark Pin 1 Callout Card */}
+                    <g transform={`translate(${x1}, ${y1})`}>
+                      <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
+                      <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
+                      
+                      {/* Hover container box */}
+                      <g transform="translate(14, -22)" className="cursor-default">
+                        {/* White-cream callout frame with shadow */}
+                        <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                        {/* Color marker column bar */}
+                        <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
+                        
+                        <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
+                        <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
+                      </g>
+                    </g>
+
+                    {/* Landmark Pin 2 Callout Card */}
+                    <g transform={`translate(${x2}, ${y2})`}>
+                      <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
+                      <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
+                      
+                      {/* Hover container box */}
+                      <g transform="translate(14, -22)" className="cursor-default">
+                        {/* White-cream callout frame with shadow */}
+                        <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                        {/* Color marker column bar */}
+                        <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
+                        
+                        <text x="12" y="17" className="font-sans text-[10px] font-[700] fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
+                        <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
+                      </g>
+                    </g>
+                  </svg>
+                )}
 
                 {/* Bottom Coordinates & Navigation Bar */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-xs text-earth-accent font-light">
