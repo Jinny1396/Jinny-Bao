@@ -31,6 +31,96 @@ import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
 
+// Helper to resolve Google Drive URLs to native lh3.googleusercontent.com/d/ID direct load links
+const getDirectImageUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // Google Drive file ID pattern
+  const driveIdPattern = /\/file\/d\/([a-zA-Z0-9_-]+)/;
+  const driveIdMatch = url.match(driveIdPattern);
+  if (driveIdMatch && driveIdMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveIdMatch[1]}`;
+  }
+  
+  const driveQueryPattern = /[?&]id=([a-zA-Z0-9_-]+)/;
+  const driveQueryMatch = url.match(driveQueryPattern);
+  if (driveQueryMatch && driveQueryMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveQueryMatch[1]}`;
+  }
+  
+  return url;
+};
+
+// Polished reusable image wrapper component with fallback, skeleton, and elegant fade-in transition
+interface CdnImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
+  src: string;
+  fallbackSrc?: string;
+}
+
+const CdnImage: React.FC<CdnImageProps> = ({ src, fallbackSrc, className, alt, ...props }) => {
+  const [imgSrc, setImgSrc] = useState<string>('');
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+
+  useEffect(() => {
+    if (!src) {
+      if (fallbackSrc) {
+        setImgSrc(fallbackSrc);
+        setStatus('loading');
+      } else {
+        setStatus('error');
+      }
+      return;
+    }
+
+    const formatted = getDirectImageUrl(src);
+    setImgSrc(formatted);
+    setStatus('loading');
+  }, [src, fallbackSrc]);
+
+  const handleLoad = () => {
+    setStatus('loaded');
+  };
+
+  const handleError = () => {
+    if (fallbackSrc && imgSrc !== fallbackSrc) {
+      setImgSrc(fallbackSrc);
+    } else {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden w-full h-full bg-stone-100 flex items-center justify-center min-h-[40px]">
+      {status === 'loading' && (
+        <div className="absolute inset-0 bg-neutral-200/50 animate-pulse flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-stone-400 border-t-transparent rounded-full animate-spin opacity-40" />
+        </div>
+      )}
+
+      {status === 'error' && (
+        <div className="absolute inset-x-0 inset-y-0 bg-stone-100 flex flex-col items-center justify-center p-3 border border-dashed border-stone-200 text-center select-none">
+          <svg className="w-5 h-5 text-stone-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span className="text-[10px] uppercase tracking-wider text-stone-400 font-sans font-medium">Image unavailable</span>
+        </div>
+      )}
+
+      {imgSrc && (
+        <img
+          src={imgSrc}
+          alt={alt || "Image"}
+          className={`${className || ''} transition-opacity duration-1000 ease-out ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={handleLoad}
+          onError={handleError}
+          referrerPolicy="no-referrer"
+          {...props}
+        />
+      )}
+    </div>
+  );
+};
+
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
 
@@ -154,6 +244,16 @@ export default function App() {
     '#3D3B36'  // Earth Dark
   ]);
   const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
+  const [isHeroLoaded, setIsHeroLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!heroImageUrl) return;
+    setIsHeroLoaded(false);
+    const img = new Image();
+    img.src = getDirectImageUrl(heroImageUrl);
+    img.onload = () => setIsHeroLoaded(true);
+    img.onerror = () => setIsHeroLoaded(true);
+  }, [heroImageUrl]);
 
   // States for CMS Panel in Admin view
   const [adminTab, setAdminTab] = useState<'rsvps' | 'cms' | 'images'>('rsvps');
@@ -1699,7 +1799,7 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Card 1: Hero Cover Photo */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
                   <div>
                     <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
                       Part 1: Hero Fullscreen Background Photo
@@ -1708,10 +1808,37 @@ export default function App() {
                       The prominent welcome photo supporting clean text styling at the bottom edge of the folding fold.
                     </p>
                   </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[16/9] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
-                      <img src={cmsImageUrl} alt="Hero Fullscreen" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="flex flex-col gap-3">
+                    <div className="relative rounded-lg overflow-hidden aspect-[16/9] bg-stone-100 hover:shadow-inner transition-shadow">
+                      <CdnImage src={cmsImageUrl} fallbackSrc="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200" alt="Hero Fullscreen" className="w-full h-full object-cover" />
                     </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
+                      <input 
+                        type="text"
+                        value={cmsImageUrl}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setCmsImageUrl(val);
+                          setHeroImageUrl(val);
+                          const docRef = doc(db, 'site_content', 'main');
+                          await setDoc(docRef, { imageUrl: val }, { merge: true });
+                        }}
+                        placeholder="Paste image link or Google Drive link..."
+                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
+                      />
+                      <span className="text-[10px] text-neutral-500 leading-tight">
+                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
+                      <hr className="grow border-earth-dark/5" />
+                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
+                      <hr className="grow border-earth-dark/5" />
+                    </div>
+
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1725,7 +1852,7 @@ export default function App() {
                 </div>
 
                 {/* Card 2: Top-Right Staggered Portrait */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
                   <div>
                     <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
                       Part 2: Top-Right Staggered Portrait
@@ -1734,10 +1861,37 @@ export default function App() {
                       Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block.
                     </p>
                   </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
-                      <img src={cmsRightPortraitUrl} alt="Top-Right Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="flex flex-col gap-3">
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
+                      <CdnImage src={cmsRightPortraitUrl} fallbackSrc="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600" alt="Top-Right Portrait" className="w-full h-full object-cover" />
                     </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
+                      <input 
+                        type="text"
+                        value={cmsRightPortraitUrl}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setCmsRightPortraitUrl(val);
+                          setRightPortraitUrl(val);
+                          const docRef = doc(db, 'site_content', 'main');
+                          await setDoc(docRef, { rightPortraitUrl: val }, { merge: true });
+                        }}
+                        placeholder="Paste image link or Google Drive link..."
+                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
+                      />
+                      <span className="text-[10px] text-neutral-500 leading-tight">
+                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
+                      <hr className="grow border-earth-dark/5" />
+                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
+                      <hr className="grow border-earth-dark/5" />
+                    </div>
+
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1751,7 +1905,7 @@ export default function App() {
                 </div>
 
                 {/* Card 3: Bottom-Left Staggered Portrait */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
                   <div>
                     <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
                       Part 3: Bottom-Left Staggered Portrait
@@ -1760,10 +1914,37 @@ export default function App() {
                       Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area.
                     </p>
                   </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
-                      <img src={cmsLeftPortraitUrl} alt="Bottom-Left Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="flex flex-col gap-3">
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
+                      <CdnImage src={cmsLeftPortraitUrl} fallbackSrc="/src/assets/images/regenerated_image_1780220158910.jpg" alt="Bottom-Left Portrait" className="w-full h-full object-cover" />
                     </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
+                      <input 
+                        type="text"
+                        value={cmsLeftPortraitUrl}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setCmsLeftPortraitUrl(val);
+                          setLeftPortraitUrl(val);
+                          const docRef = doc(db, 'site_content', 'main');
+                          await setDoc(docRef, { leftPortraitUrl: val }, { merge: true });
+                        }}
+                        placeholder="Paste image link or Google Drive link..."
+                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
+                      />
+                      <span className="text-[10px] text-neutral-500 leading-tight">
+                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
+                      <hr className="grow border-earth-dark/5" />
+                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
+                      <hr className="grow border-earth-dark/5" />
+                    </div>
+
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1777,7 +1958,7 @@ export default function App() {
                 </div>
 
                 {/* Card 4: Dress Code Palette Visuals */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
                   <div>
                     <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
                       Part 4: Dress Code Color Palette Visuals / Images
@@ -1786,10 +1967,37 @@ export default function App() {
                       Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches.
                     </p>
                   </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
-                      <img src={cmsDressCodeImageUrl} alt="Dress Code Inspiration" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="flex flex-col gap-3">
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] bg-stone-100 hover:shadow-inner transition-shadow">
+                      <CdnImage src={cmsDressCodeImageUrl} fallbackSrc="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600" alt="Dress Code Inspiration" className="w-full h-full object-cover" />
                     </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
+                      <input 
+                        type="text"
+                        value={cmsDressCodeImageUrl}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setCmsDressCodeImageUrl(val);
+                          setDressCodeImageUrl(val);
+                          const docRef = doc(db, 'site_content', 'main');
+                          await setDoc(docRef, { dressCodeImageUrl: val }, { merge: true });
+                        }}
+                        placeholder="Paste image link or Google Drive link..."
+                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
+                      />
+                      <span className="text-[10px] text-neutral-500 leading-tight">
+                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
+                      <hr className="grow border-earth-dark/5" />
+                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
+                      <hr className="grow border-earth-dark/5" />
+                    </div>
+
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1803,19 +2011,19 @@ export default function App() {
                 </div>
 
                 {/* Card 5: Venue Map Illustration */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
                   <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-[#8A9A86] uppercase block mb-1">
                       Part 5: Venue Map Illustration Graphic
                     </span>
                     <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
                       Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map.
                     </p>
                   </div>
-                  <div>
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow flex items-center justify-center">
+                  <div className="flex flex-col gap-3">
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] bg-stone-100 hover:shadow-inner transition-shadow flex items-center justify-center">
                       {cmsMapImageUrl ? (
-                        <img src={cmsMapImageUrl} alt="Venue Map Override" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <CdnImage src={cmsMapImageUrl} alt="Venue Map Override" className="w-full h-full object-cover" />
                       ) : (
                         <div className="text-center p-4">
                           <span className="block text-xs text-neutral-400 font-serif italic mb-1">No custom illustration</span>
@@ -1823,6 +2031,33 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
+                      <input 
+                        type="text"
+                        value={cmsMapImageUrl}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setCmsMapImageUrl(val);
+                          setMapImageUrl(val);
+                          const docRef = doc(db, 'site_content', 'main');
+                          await setDoc(docRef, { mapImageUrl: val }, { merge: true });
+                        }}
+                        placeholder="Paste image link or Google Drive link..."
+                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
+                      />
+                      <span className="text-[10px] text-neutral-500 leading-tight">
+                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
+                      <hr className="grow border-earth-dark/5" />
+                      <span>OR CHOOSE ACTIONS UNDERNEATH</span>
+                      <hr className="grow border-earth-dark/5" />
+                    </div>
+
                     <div className="flex flex-col gap-2">
                       <input 
                         type="file" 
@@ -1844,7 +2079,7 @@ export default function App() {
                               await setDoc(docRef, { mapImageUrl: '' }, { merge: true });
                             }
                           }}
-                          className="text-[9px] font-sans font-bold tracking-widest text-red-700 hover:text-red-900 border border-red-200 bg-red-50 py-1 px-2 rounded hover:bg-red-100 uppercase transition-all duration-200"
+                          className="text-[9px] font-sans font-bold tracking-widest text-red-700 hover:text-red-900 border border-red-200 bg-red-50 py-1.5 px-2 rounded-lg hover:bg-red-100 uppercase transition-all duration-200 cursor-pointer"
                         >
                           ✕ Clear Custom & Restore Local SVG
                         </button>
@@ -2027,12 +2262,24 @@ export default function App() {
       {/* SECTION 1: THE CLEAN HERO BANNER */}
       <section 
         id="hero" 
-        className="h-screen w-full relative bg-cover bg-center bg-no-repeat flex flex-col justify-end items-center pb-24 select-none overflow-hidden"
-        style={{ 
-          backgroundImage: `url(${heroImageUrl})`,
-          backgroundAttachment: 'fixed'
-        }}
+        className="h-screen w-full relative flex flex-col justify-end items-center pb-24 select-none overflow-hidden bg-stone-100"
       >
+        {/* Cached and resolved background layer */}
+        <div 
+          className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ease-out ${isHeroLoaded ? 'opacity-100' : 'opacity-0'}`}
+          style={{ 
+            backgroundImage: `url(${getDirectImageUrl(heroImageUrl)})`,
+            backgroundAttachment: 'fixed'
+          }}
+        />
+
+        {/* Dynamic lightweight micro-shimmer fallback loading skeleton background */}
+        {!isHeroLoaded && (
+          <div className="absolute inset-0 bg-neutral-200/55 animate-pulse flex items-center justify-center">
+            <div className="w-10 h-10 border-4 border-stone-300 border-t-transparent rounded-full animate-spin opacity-30" />
+          </div>
+        )}
+
         {/* Smooth dark dim overlay tint */}
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
 
@@ -2059,11 +2306,10 @@ export default function App() {
             <div className="lg:col-span-3 flex justify-center order-2 lg:order-1 select-text">
               <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
                 <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                  <img 
+                  <CdnImage 
                     src={leftPortraitUrl} 
                     alt="Sunset Tokyo Tower" 
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                    referrerPolicy="no-referrer"
                   />
                   <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
                 </div>
@@ -2134,11 +2380,10 @@ export default function App() {
             <div className="lg:col-span-3 flex justify-center order-3 select-text">
               <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
                 <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                  <img 
+                  <CdnImage 
                     src={rightPortraitUrl} 
                     alt="Nighttime Couple" 
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                    referrerPolicy="no-referrer"
                   />
                   <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
                 </div>
@@ -2205,121 +2450,131 @@ export default function App() {
                   <span>{t.interactiveMapBadge}</span>
                 </div>
 
-                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map */}
-                <svg 
-                  viewBox="0 0 500 400" 
-                  className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
-                  aria-label="Scenic hand-drawn grounds map"
-                >
-                  {/* Fine vintage grid lines underneath */}
-                  <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
-                    <line x1="100" y1="0" x2="100" y2="400" />
-                    <line x1="200" y1="0" x2="200" y2="400" />
-                    <line x1="300" y1="0" x2="300" y2="400" />
-                    <line x1="400" y1="0" x2="400" y2="400" />
-                    <line x1="0" y1="100" x2="500" y2="100" />
-                    <line x1="0" y1="200" x2="500" y2="200" />
-                    <line x1="0" y1="300" x2="500" y2="300" />
-                  </g>
-
-                  {/* Contour land wave lines */}
-                  {contours.map((pathStr, index) => (
-                    <path 
-                      key={index} 
-                      d={pathStr} 
-                      className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
+                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map or Custom Map Illustration */}
+                {mapImageUrl ? (
+                  <div className="w-full aspect-[5/4] relative bg-stone-100 rounded-xl overflow-hidden border border-earth-dark/10 p-1 bg-white shadow-inner">
+                    <CdnImage 
+                      src={mapImageUrl} 
+                      alt="Custom venue map illustration"
+                      className="w-full h-full object-cover rounded-lg"
                     />
-                  ))}
-                  
-                  {/* Organic river fork flowing across */}
-                  <path 
-                    d={riverPath} 
-                    className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
-                  />
-                  <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
-                    <text 
-                      x="0" 
-                      y="0" 
-                      transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
-                      className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
-                    >
-                      {t.mapSiletzRiver}
-                    </text>
-                  </g>
-
-                  {/* Ground pathway - winding/meandering forest pass */}
-                  <path 
-                    d={roadPath} 
-                    className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
-                  />
-                  <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
-                    <text 
-                      x="0" 
-                      y="0" 
-                      transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
-                      className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
-                    >
-                      {t.mapForestPass}
-                    </text>
-                  </g>
-
-                  {/* Secondary light connection path between sites */}
-                  <path 
-                    d={path1} 
-                    className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
-                  />
-
-                  {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
-                  {pines.map((p, idx) => (
-                    <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
-                      <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
-                      <path d="M -3,-1 L 0,-5 L 3,-1" />
+                  </div>
+                ) : (
+                  <svg 
+                    viewBox="0 0 500 400" 
+                    className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
+                    aria-label="Scenic hand-drawn grounds map"
+                  >
+                    {/* Fine vintage grid lines underneath */}
+                    <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
+                      <line x1="100" y1="0" x2="100" y2="400" />
+                      <line x1="200" y1="0" x2="200" y2="400" />
+                      <line x1="300" y1="0" x2="300" y2="400" />
+                      <line x1="400" y1="0" x2="400" y2="400" />
+                      <line x1="0" y1="100" x2="500" y2="100" />
+                      <line x1="0" y1="200" x2="500" y2="200" />
+                      <line x1="0" y1="300" x2="500" y2="300" />
                     </g>
-                  ))}
 
-                  {/* Compass star motif in top left */}
-                  <g transform="translate(55, 65)">
-                    <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
-                    <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
-                    <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
-                    <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
-                    <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
-                  </g>
-
-                  {/* Landmark Pin 1 Callout Card */}
-                  <g transform={`translate(${x1}, ${y1})`}>
-                    <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
-                    <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
+                    {/* Contour land wave lines */}
+                    {contours.map((pathStr, index) => (
+                      <path 
+                        key={index} 
+                        d={pathStr} 
+                        className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
+                      />
+                    ))}
                     
-                    {/* Hover container box */}
-                    <g transform="translate(14, -22)" className="cursor-default">
-                      {/* White-cream callout frame with shadow */}
-                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
-                      {/* Color marker column bar */}
-                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
-                      
-                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
-                      <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
+                    {/* Organic river fork flowing across */}
+                    <path 
+                      d={riverPath} 
+                      className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
+                    />
+                    <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
+                      <text 
+                        x="0" 
+                        y="0" 
+                        transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
+                        className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
+                      >
+                        {t.mapSiletzRiver}
+                      </text>
                     </g>
-                  </g>
 
-                  {/* Landmark Pin 2 Callout Card */}
-                  <g transform={`translate(${x2}, ${y2})`}>
-                    <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
-                    <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
-                    
-                    {/* Hover container box */}
-                    <g transform="translate(14, -22)" className="cursor-default">
-                      {/* White-cream callout frame with shadow */}
-                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
-                      {/* Color marker column bar */}
-                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
-                      
-                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
-                      <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
+                    {/* Ground pathway - winding/meandering forest pass */}
+                    <path 
+                      d={roadPath} 
+                      className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
+                    />
+                    <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
+                      <text 
+                        x="0" 
+                        y="0" 
+                        transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
+                        className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
+                      >
+                        {t.mapForestPass}
+                      </text>
                     </g>
-                  </g>
-                </svg>
+
+                    {/* Secondary light connection path between sites */}
+                    <path 
+                      d={path1} 
+                      className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
+                    />
+
+                    {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
+                    {pines.map((p, idx) => (
+                      <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
+                        <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
+                        <path d="M -3,-1 L 0,-5 L 3,-1" />
+                      </g>
+                    ))}
+
+                    {/* Compass star motif in top left */}
+                    <g transform="translate(55, 65)">
+                      <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
+                      <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
+                      <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
+                      <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
+                      <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
+                    </g>
+
+                    {/* Landmark Pin 1 Callout Card */}
+                    <g transform={`translate(${x1}, ${y1})`}>
+                      <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
+                      <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
+                      
+                      {/* Hover container box */}
+                      <g transform="translate(14, -22)" className="cursor-default">
+                        {/* White-cream callout frame with shadow */}
+                        <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                        {/* Color marker column bar */}
+                        <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
+                        
+                        <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
+                        <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
+                      </g>
+                    </g>
+
+                    {/* Landmark Pin 2 Callout Card */}
+                    <g transform={`translate(${x2}, ${y2})`}>
+                      <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
+                      <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
+                      
+                      {/* Hover container box */}
+                      <g transform="translate(14, -22)" className="cursor-default">
+                        {/* White-cream callout frame with shadow */}
+                        <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                        {/* Color marker column bar */}
+                        <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
+                        
+                        <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
+                        <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
+                      </g>
+                    </g>
+                  </svg>
+                )}
 
                 {/* Bottom Coordinates & Navigation Bar */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-xs text-earth-accent font-light">
@@ -2444,6 +2699,18 @@ export default function App() {
                     {t.dressCodeGuidelinesDesc}
                   </p>
                 </div>
+
+                {/* Dynamic Dress Code Inspiration Picture */}
+                {dressCodeImageUrl && (
+                  <div className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-stone-100 max-h-[280px] border border-earth-dark/10 p-1.5 bg-white shadow-xs">
+                    <CdnImage 
+                      src={dressCodeImageUrl} 
+                      fallbackSrc="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600"
+                      alt="Dress Code Visual Inspiration mood board"
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Right Palette circle list: 5 cols */}
