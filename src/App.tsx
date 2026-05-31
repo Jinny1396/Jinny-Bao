@@ -142,7 +142,7 @@ export default function App() {
 
   const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
-  const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+  const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('/src/assets/images/regenerated_image_1780220158910.jpg');
   const [rightPortraitUrl, setRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
   const [dressCodeImageUrl, setDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
   const [mapImageUrl, setMapImageUrl] = useState<string>('');
@@ -161,7 +161,7 @@ export default function App() {
   const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
-  const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+  const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('/src/assets/images/regenerated_image_1780220158910.jpg');
   const [cmsRightPortraitUrl, setCmsRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
   const [cmsDressCodeImageUrl, setCmsDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
   const [cmsMapImageUrl, setCmsMapImageUrl] = useState<string>('');
