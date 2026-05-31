@@ -142,6 +142,8 @@ export default function App() {
 
   const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+  const [rightPortraitUrl, setRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
   const [paletteColors, setPaletteColors] = useState<string[]>([
     '#DECCA6', // Sand/Gold
     '#C0A080', // Taupe/Beige
@@ -157,6 +159,8 @@ export default function App() {
   const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+  const [cmsRightPortraitUrl, setCmsRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
   const [cmsPaletteColors, setCmsPaletteColors] = useState<string[]>([
     '#DECCA6',
     '#C0A080',
@@ -166,6 +170,7 @@ export default function App() {
   ]);
 
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right'>('hero');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -255,6 +260,14 @@ export default function App() {
           if (data.imageUrl) {
             setHeroImageUrl(data.imageUrl);
             setCmsImageUrl(data.imageUrl);
+          }
+          if (data.leftPortraitUrl) {
+            setLeftPortraitUrl(data.leftPortraitUrl);
+            setCmsLeftPortraitUrl(data.leftPortraitUrl);
+          }
+          if (data.rightPortraitUrl) {
+            setRightPortraitUrl(data.rightPortraitUrl);
+            setCmsRightPortraitUrl(data.rightPortraitUrl);
           }
 
           if (data.paletteColors && Array.isArray(data.paletteColors)) {
@@ -429,11 +442,12 @@ export default function App() {
     }
   };
 
-  const startUpload = (file: File) => {
+  const startUpload = (file: File, target: 'hero' | 'left' | 'right' = 'hero') => {
     setIsUploading(true);
+    setActiveUploadTarget(target);
     setUploadProgress(0);
 
-    const storageRef = ref(storage, `site_assets/couple_portrait_${Date.now()}_${file.name}`);
+    const storageRef = ref(storage, `site_assets/${target}_portrait_${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
@@ -450,7 +464,13 @@ export default function App() {
       async () => {
         try {
           const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          setCmsImageUrl(downloadUrl);
+          if (target === 'hero') {
+            setCmsImageUrl(downloadUrl);
+          } else if (target === 'left') {
+            setCmsLeftPortraitUrl(downloadUrl);
+          } else if (target === 'right') {
+            setCmsRightPortraitUrl(downloadUrl);
+          }
           setIsUploading(false);
         } catch (err: any) {
           console.error('Error getting download URL:', err);
@@ -473,6 +493,8 @@ export default function App() {
         ENG: cmsTranslations.ENG,
         VIE: cmsTranslations.VIE,
         imageUrl: cmsImageUrl,
+        leftPortraitUrl: cmsLeftPortraitUrl,
+        rightPortraitUrl: cmsRightPortraitUrl,
         paletteColors: cmsPaletteColors,
         updatedAt: new Date().toISOString(),
       });
@@ -480,6 +502,8 @@ export default function App() {
       // Update active live states of the landing page
       setSiteContent(cmsTranslations);
       setHeroImageUrl(cmsImageUrl);
+      setLeftPortraitUrl(cmsLeftPortraitUrl);
+      setRightPortraitUrl(cmsRightPortraitUrl);
       setPaletteColors(cmsPaletteColors);
 
       setSaveStatus('saved');
@@ -1292,74 +1316,91 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
             {/* Left Column: Image Asset Swap / Firebase Storage Section */}
             <div className="lg:col-span-4 flex flex-col gap-6">
-              <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 shadow-xs text-left">
-                <h2 className="font-serif text-lg font-light text-earth-dark mb-4 pb-2 border-b border-earth-dark/5 select-text">
-                  I. Homepage Portrait Swap
-                </h2>
-                <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed mb-4 select-text">
-                  Update the main featured picture on the landing page of the wedding. Drag-and-drop or choose a new .jpg/.png portrait asset.
-                </p>
-
-                {/* Drag and Drop Zone */}
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`relative border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] ${
-                    isDragging 
-                      ? 'border-olive-drab bg-olive-light/10 scale-[0.99] shadow-inner' 
-                      : 'border-earth-dark/20 hover:border-olive-drab bg-white/30'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    id="cms-file-upload"
-                    onChange={handleImageFileChange}
-                    accept="image/*"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    title=""
-                  />
-                  <Smile size={24} className="text-earth-dark/40 mb-3 animate-bounce" />
-                  <span className="font-sans text-xs font-semibold text-earth-dark uppercase tracking-widest block mb-1">
-                    FILE DROP ZONE
-                  </span>
-                  <span className="font-serif text-[11px] text-[#6E6A5F] italic">
-                    Or click to choose image file
-                  </span>
+              <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 shadow-xs text-left flex flex-col gap-6">
+                <div>
+                  <h2 className="font-serif text-lg font-light text-earth-dark mb-1 pb-1 border-b border-earth-dark/5 select-text">
+                    I. Image Assets Registry
+                  </h2>
+                  <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed select-text">
+                    Manage the main visual backdrop assets for both your Hero screen cover and supporting date section portraits.
+                  </p>
                 </div>
 
-                {/* Upload progress feedback */}
+                {/* Upload Node 1: Hero Fullscreen Background */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/30 backdrop-blur-xs">
+                  <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                    Hero Fullscreen Background
+                  </span>
+                  <div className="relative rounded-lg overflow-hidden aspect-[16/9] mb-3 bg-stone-100">
+                    <img src={cmsImageUrl} alt="Hero Fullscreen" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'hero');
+                      }}
+                      className="text-xs font-sans w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload Node 2: Left Side Portrait Image */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/30 backdrop-blur-xs">
+                  <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                    Left Side Portrait (Tokyo Tower)
+                  </span>
+                  <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px]">
+                    <img src={cmsLeftPortraitUrl} alt="Left Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'left');
+                      }}
+                      className="text-xs font-sans w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload Node 3: Right Side Portrait Image */}
+                <div className="border border-[#DECCA6]/30 p-4 rounded-xl relative bg-white/30 backdrop-blur-xs">
+                  <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                    Right Side Portrait (Nighttime)
+                  </span>
+                  <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px]">
+                    <img src={cmsRightPortraitUrl} alt="Right Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'right');
+                      }}
+                      className="text-xs font-sans w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Active Global Progress Indicator */}
                 {isUploading && (
-                  <div className="mt-4 p-3 bg-stone-100 rounded-xl border border-earth-dark/5">
+                  <div className="p-3 bg-stone-100 rounded-xl border border-earth-dark/15">
                     <div className="flex justify-between items-center text-[10px] font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
-                      <span>Uploading image...</span>
+                      <span>Uploading to {activeUploadTarget === 'hero' ? 'Hero Background' : activeUploadTarget === 'left' ? 'Left Side Portrait' : 'Right Side Portrait'}...</span>
                       <span>{uploadProgress}%</span>
                     </div>
-                    <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-olive-drab h-full rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
+                    <div className="w-full bg-stone-200 h-1 rounded-full overflow-hidden">
+                      <div className="bg-olive-drab h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                     </div>
                   </div>
                 )}
-
-                {/* Preview Current Image Block */}
-                <div className="mt-6">
-                  <span className="font-sans text-[9px] tracking-widest text-[#6E6A5F] uppercase block mb-3 font-semibold">
-                    ACTIVE IMAGE PORTRAIT PREVIEW:
-                  </span>
-                  <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.02)] w-full">
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100">
-                      <img 
-                        src={cmsImageUrl} 
-                        alt="CMS Preview Portal" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -1808,111 +1849,127 @@ export default function App() {
         </a>
       </div>
 
+      {/* SECTION 1: THE CLEAN HERO BANNER */}
+      <section 
+        id="hero" 
+        className="h-screen w-full relative bg-cover bg-center bg-no-repeat flex flex-col justify-end items-center pb-24 select-none overflow-hidden"
+        style={{ 
+          backgroundImage: `url(${heroImageUrl})`,
+          backgroundAttachment: 'fixed'
+        }}
+      >
+        {/* Smooth dark dim overlay tint */}
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+
+        {/* Centered names typography at bottom edge of screen fold */}
+        <div className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]">
+          <h1 className="text-[9vw] sm:text-[7vw] lg:text-[4.5vw] font-serif font-light leading-[1.1] tracking-wider text-white drop-shadow-md select-text">
+            {t.weddingName}
+          </h1>
+        </div>
+      </section>
+
       {/* Main Content Lookbook wrapper - meticulously padded */}
       <main className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 lg:pl-32 lg:pr-12 py-12">
         
-        {/* SEC I: HERO SECTION */}
+        {/* SECTION 2: THE COMPACT "THE DATE" AREA */}
         <section 
-          id="hero" 
-          className="min-h-[92vh] flex flex-col justify-between pt-16 pb-24 relative"
+          id="the-date" 
+          className="min-h-[85vh] py-16 relative flex flex-col justify-center items-center scroll-mt-12"
         >
-          {/* Header Accent Meta line */}
-          <div className="flex flex-col gap-2 items-start opacity-0 animate-letter-spacing-unfold">
-            <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none">
-              {t.gatheringHeader}
-            </span>
-            <span className="text-xs font-serif italic text-earth-accent font-light">
-              {t.gatheringSub}
-            </span>
-          </div>
-
-          {/* Core Title (Names of Couple) & Dynamic Image */}
-          <div className="my-auto py-12 md:py-16">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-              <div className="lg:col-span-7">
-                <h1 className="text-[10vw] sm:text-[7vw] lg:text-[5vw] font-serif font-light leading-[1.05] tracking-tight mb-6 select-text">
-                  {t.weddingName}
-                </h1>
-                
-                {/* The Vibe Narrative Block */}
-                <p className="max-w-md font-serif text-lg md:text-xl text-earth-accent font-light leading-relaxed mb-8 select-text">
-                  {t.heroVibeText}
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-6 mt-4 font-sans text-[11px] tracking-[0.25em] text-earth-dark/70">
-                  <div className="flex items-center gap-3">
-                    <span className="text-olive-light">10</span>
-                    <span>{t.october}</span>
-                  </div>
-                  <div className="hidden sm:inline text-earth-dark/20">•</div>
-                  <div className="flex items-center gap-3">
-                    <span>{t.portland}</span>
-                  </div>
-                  <div className="hidden sm:inline text-earth-dark/20">•</div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dynamic Image Canvas Frame */}
-              <div className="lg:col-span-5 flex justify-center">
-                <div className="relative p-2.5 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] group max-w-sm w-full">
-                  <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                    <img 
-                      src={heroImageUrl} 
-                      alt="Gia Bao & John Portrait" 
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
-                  </div>
+          {/* Symmetrical date flanking layout */}
+          <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center justify-center">
+            
+            {/* Supporting left portrait (Sunset Tokyo Tower Image) */}
+            <div className="lg:col-span-3 flex justify-center order-2 lg:order-1 select-text">
+              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
+                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
+                  <img 
+                    src={leftPortraitUrl} 
+                    alt="Sunset Tokyo Tower" 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Minimalist Countdown Timer Section */}
-          <div className="border-t border-earth-dark/10 pt-8 flex grid grid-cols-2 md:grid-cols-4 gap-6 relative">
-            <div className="absolute right-0 top-0 -translate-y-12 block lg:hidden">
-              <MinimalRoseDetail />
-            </div>
+            {/* Central Block: Perfect Center text blocks, dates, and countdown */}
+            <div className="lg:col-span-6 flex flex-col items-center text-center px-4 order-1 lg:order-2 select-text">
+              <div className="flex flex-col gap-2 items-center mb-6">
+                <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none block font-bold select-text">
+                  {t.gatheringHeader}
+                </span>
+                <span className="text-xs font-serif italic text-earth-accent font-light select-text">
+                  {t.gatheringSub}
+                </span>
+              </div>
 
-            {/* Countdown Days */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownDays}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.days}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
+              {/* The Vibe Narrative Block */}
+              <p className="max-w-md font-serif text-base sm:text-lg text-earth-accent font-light leading-relaxed mb-8 select-text">
+                {t.heroVibeText}
+              </p>
+
+              {/* Specific Date & Address details */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center font-sans text-[11px] tracking-[0.25em] text-earth-dark/70 mb-10 select-all border-y border-earth-dark/10 py-4 w-full max-w-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-olive-light font-bold">10</span>
+                  <span className="font-semibold">{t.october}</span>
+                </div>
+                <div className="hidden sm:inline text-earth-dark/20">•</div>
+                <div>{t.portland}</div>
+                <div className="hidden sm:inline text-earth-[#8A9A86]/40">•</div>
+                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
+              </div>
+
+              {/* Minimalist Countdown Timer Section */}
+              <div className="w-full border border-earth-dark/10 p-6 rounded-2xl bg-white/30 backdrop-blur-xs grid grid-cols-4 gap-4 relative">
+                {/* Countdown Days */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownDays}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.days}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
+                </div>
+
+                {/* Countdown Hours */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownHours}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.hours}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
+                </div>
+
+                {/* Countdown Minutes */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownMinutes}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.minutes}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
+                </div>
+
+                {/* Countdown Seconds */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownSeconds}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.seconds}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
+                </div>
               </div>
             </div>
 
-            {/* Countdown Hours */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownHours}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.hours}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
+            {/* Supporting right portrait (Nighttime Couple Image) */}
+            <div className="lg:col-span-3 flex justify-center order-3 select-text">
+              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
+                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
+                  <img 
+                    src={rightPortraitUrl} 
+                    alt="Nighttime Couple" 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
+                </div>
               </div>
             </div>
 
-            {/* Countdown Minutes */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownMinutes}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.minutes}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
-              </div>
-            </div>
-
-            {/* Countdown Seconds */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownSeconds}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.seconds}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
-              </div>
-            </div>
           </div>
         </section>
 

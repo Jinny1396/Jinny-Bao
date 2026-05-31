@@ -86,8 +86,8 @@ export interface Translations {
 
 export const translations: Record<'ENG' | 'VIE', Translations> = {
   ENG: {
-    weddingName: "Gia Bao & John",
-    weddingTitle: "Gia Bao & John — The Gathering",
+    weddingName: "Bảo Eve & Johnathan",
+    weddingTitle: "Bảo Eve & Johnathan — The Gathering",
     gatheringHeader: "Gathering for the Gathering",
     gatheringSub: "Under the changing light of October",
     heroVibeText: "Invite you to share in a quiet weekend of woodfire, forest walks, and the commitment of vows.",
@@ -171,8 +171,8 @@ export const translations: Record<'ENG' | 'VIE', Translations> = {
     dressCodeColorsLabel: "Our Color Palette"
   },
   VIE: {
-    weddingName: "Gia Bảo & John",
-    weddingTitle: "Gia Bảo & John — Buổi Hội Ngộ",
+    weddingName: "Bảo Eve & Johnathan",
+    weddingTitle: "Bảo Eve & Johnathan — Buổi Hội Ngộ",
     gatheringHeader: "Hội Ngộ Giữa Thiên Nhiên",
     gatheringSub: "Dưới ánh nắng thu tháng Mười",
     heroVibeText: "Kính mời quý vị cùng sẻ chia một cuối tuần bình yên bên bếp lửa, dạo bước giữa rừng thông và chứng kiến lời thề nguyện.",
