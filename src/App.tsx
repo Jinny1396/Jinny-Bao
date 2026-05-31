@@ -142,6 +142,10 @@ export default function App() {
 
   const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+  const [rightPortraitUrl, setRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
+  const [dressCodeImageUrl, setDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
+  const [mapImageUrl, setMapImageUrl] = useState<string>('');
   const [paletteColors, setPaletteColors] = useState<string[]>([
     '#DECCA6', // Sand/Gold
     '#C0A080', // Taupe/Beige
@@ -152,11 +156,15 @@ export default function App() {
   const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
 
   // States for CMS Panel in Admin view
-  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms'>('rsvps');
+  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms' | 'images'>('rsvps');
   const [cmsLang, setCmsLang] = useState<'ENG' | 'VIE'>('ENG');
   const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+  const [cmsRightPortraitUrl, setCmsRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
+  const [cmsDressCodeImageUrl, setCmsDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
+  const [cmsMapImageUrl, setCmsMapImageUrl] = useState<string>('');
   const [cmsPaletteColors, setCmsPaletteColors] = useState<string[]>([
     '#DECCA6',
     '#C0A080',
@@ -166,6 +174,7 @@ export default function App() {
   ]);
 
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right' | 'dress' | 'map'>('hero');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -255,6 +264,22 @@ export default function App() {
           if (data.imageUrl) {
             setHeroImageUrl(data.imageUrl);
             setCmsImageUrl(data.imageUrl);
+          }
+          if (data.leftPortraitUrl) {
+            setLeftPortraitUrl(data.leftPortraitUrl);
+            setCmsLeftPortraitUrl(data.leftPortraitUrl);
+          }
+          if (data.rightPortraitUrl) {
+            setRightPortraitUrl(data.rightPortraitUrl);
+            setCmsRightPortraitUrl(data.rightPortraitUrl);
+          }
+          if (data.dressCodeImageUrl) {
+            setDressCodeImageUrl(data.dressCodeImageUrl);
+            setCmsDressCodeImageUrl(data.dressCodeImageUrl);
+          }
+          if (data.mapImageUrl) {
+            setMapImageUrl(data.mapImageUrl);
+            setCmsMapImageUrl(data.mapImageUrl);
           }
 
           if (data.paletteColors && Array.isArray(data.paletteColors)) {
@@ -429,11 +454,12 @@ export default function App() {
     }
   };
 
-  const startUpload = (file: File) => {
+  const startUpload = (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map' = 'hero') => {
     setIsUploading(true);
+    setActiveUploadTarget(target);
     setUploadProgress(0);
 
-    const storageRef = ref(storage, `site_assets/couple_portrait_${Date.now()}_${file.name}`);
+    const storageRef = ref(storage, `site_assets/${target}_portrait_${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
@@ -450,7 +476,33 @@ export default function App() {
       async () => {
         try {
           const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          setCmsImageUrl(downloadUrl);
+
+          // Overwrite immediately in Firestore with merge support
+          let fieldKey = 'imageUrl';
+          if (target === 'left') fieldKey = 'leftPortraitUrl';
+          else if (target === 'right') fieldKey = 'rightPortraitUrl';
+          else if (target === 'dress') fieldKey = 'dressCodeImageUrl';
+          else if (target === 'map') fieldKey = 'mapImageUrl';
+
+          const docRef = doc(db, 'site_content', 'main');
+          await setDoc(docRef, { [fieldKey]: downloadUrl }, { merge: true });
+
+          if (target === 'hero') {
+            setCmsImageUrl(downloadUrl);
+            setHeroImageUrl(downloadUrl);
+          } else if (target === 'left') {
+            setCmsLeftPortraitUrl(downloadUrl);
+            setLeftPortraitUrl(downloadUrl);
+          } else if (target === 'right') {
+            setCmsRightPortraitUrl(downloadUrl);
+            setRightPortraitUrl(downloadUrl);
+          } else if (target === 'dress') {
+            setCmsDressCodeImageUrl(downloadUrl);
+            setDressCodeImageUrl(downloadUrl);
+          } else if (target === 'map') {
+            setCmsMapImageUrl(downloadUrl);
+            setMapImageUrl(downloadUrl);
+          }
           setIsUploading(false);
         } catch (err: any) {
           console.error('Error getting download URL:', err);
@@ -473,6 +525,10 @@ export default function App() {
         ENG: cmsTranslations.ENG,
         VIE: cmsTranslations.VIE,
         imageUrl: cmsImageUrl,
+        leftPortraitUrl: cmsLeftPortraitUrl,
+        rightPortraitUrl: cmsRightPortraitUrl,
+        dressCodeImageUrl: cmsDressCodeImageUrl,
+        mapImageUrl: cmsMapImageUrl,
         paletteColors: cmsPaletteColors,
         updatedAt: new Date().toISOString(),
       });
@@ -480,6 +536,10 @@ export default function App() {
       // Update active live states of the landing page
       setSiteContent(cmsTranslations);
       setHeroImageUrl(cmsImageUrl);
+      setLeftPortraitUrl(cmsLeftPortraitUrl);
+      setRightPortraitUrl(cmsRightPortraitUrl);
+      setDressCodeImageUrl(cmsDressCodeImageUrl);
+      setMapImageUrl(cmsMapImageUrl);
       setPaletteColors(cmsPaletteColors);
 
       setSaveStatus('saved');
@@ -1011,7 +1071,7 @@ export default function App() {
             </header>
 
             {/* Sub-navigation Tab Selector */}
-            <div className="flex border-b border-earth-dark/10 mb-8 gap-6">
+            <div className="flex border-b border-earth-dark/10 mb-8 gap-6 overflow-x-auto whitespace-nowrap">
               <button
                 type="button"
                 onClick={() => setAdminTab('rsvps')}
@@ -1034,6 +1094,17 @@ export default function App() {
               >
                 Website Content (CMS)
               </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('images')}
+                className={`pb-3 text-xs tracking-[0.2em] font-sans font-bold uppercase cursor-pointer border-b-2 transition-all duration-300 ${
+                  adminTab === 'images'
+                    ? 'border-olive-drab text-[#5E5B52]'
+                    : 'border-transparent text-[#6E6A5F]/60 hover:text-earth-dark font-medium'
+                }`}
+              >
+                🖼️ Global Image Assets Registry
+              </button>
             </div>
 
             {/* Error alerts if firebase collection can't load */}
@@ -1044,7 +1115,7 @@ export default function App() {
               </div>
             )}
 
-            {adminTab === 'rsvps' ? (
+            {adminTab === 'rsvps' && (
               <>
                 {/* Summary KPI Grid */}
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -1288,83 +1359,12 @@ export default function App() {
               </div>
             </div>
           </>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
-            {/* Left Column: Image Asset Swap / Firebase Storage Section */}
-            <div className="lg:col-span-4 flex flex-col gap-6">
-              <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 shadow-xs text-left">
-                <h2 className="font-serif text-lg font-light text-earth-dark mb-4 pb-2 border-b border-earth-dark/5 select-text">
-                  I. Homepage Portrait Swap
-                </h2>
-                <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed mb-4 select-text">
-                  Update the main featured picture on the landing page of the wedding. Drag-and-drop or choose a new .jpg/.png portrait asset.
-                </p>
+        )}
 
-                {/* Drag and Drop Zone */}
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`relative border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] ${
-                    isDragging 
-                      ? 'border-olive-drab bg-olive-light/10 scale-[0.99] shadow-inner' 
-                      : 'border-earth-dark/20 hover:border-olive-drab bg-white/30'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    id="cms-file-upload"
-                    onChange={handleImageFileChange}
-                    accept="image/*"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    title=""
-                  />
-                  <Smile size={24} className="text-earth-dark/40 mb-3 animate-bounce" />
-                  <span className="font-sans text-xs font-semibold text-earth-dark uppercase tracking-widest block mb-1">
-                    FILE DROP ZONE
-                  </span>
-                  <span className="font-serif text-[11px] text-[#6E6A5F] italic">
-                    Or click to choose image file
-                  </span>
-                </div>
-
-                {/* Upload progress feedback */}
-                {isUploading && (
-                  <div className="mt-4 p-3 bg-stone-100 rounded-xl border border-earth-dark/5">
-                    <div className="flex justify-between items-center text-[10px] font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
-                      <span>Uploading image...</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-olive-drab h-full rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Preview Current Image Block */}
-                <div className="mt-6">
-                  <span className="font-sans text-[9px] tracking-widest text-[#6E6A5F] uppercase block mb-3 font-semibold">
-                    ACTIVE IMAGE PORTRAIT PREVIEW:
-                  </span>
-                  <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.02)] w-full">
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100">
-                      <img 
-                        src={cmsImageUrl} 
-                        alt="CMS Preview Portal" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Web Content Modification Form */}
-            <div className="lg:col-span-8">
+        {adminTab === 'cms' && (
+          <div className="grid grid-cols-1 gap-8 mt-4">
+            {/* Full Width Column: Web Content Modification Form */}
+            <div className="w-full">
               <form onSubmit={handleSaveCmsContent} className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col gap-6 text-left">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-earth-dark/5 pb-4">
                   <div>
@@ -1664,6 +1664,222 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {adminTab === 'images' && (
+          <div className="flex flex-col gap-8 mt-4">
+            <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs text-left">
+              <div className="border-b border-earth-dark/5 pb-4 mb-6">
+                <h2 className="font-serif text-2xl font-light text-earth-dark flex items-center gap-2 select-text">
+                  <span>🖼️ Global Image Assets Registry</span>
+                </h2>
+                <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
+                  All image inputs utilize direct Cloud integration. Uploading instantly stores artifacts securely in Firebase Storage, generates a permanent signature link, and overwrites the active site property inside document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-olive-drab">site_content/main</code>. Live previews will render immediately.
+                </p>
+              </div>
+
+              {/* Active Global Progress Indicator inside the workspace */}
+              {isUploading && (
+                <div className="p-4 mb-6 bg-olive-light/10 rounded-xl border border-olive-light/25 animate-pulse">
+                  <div className="flex justify-between items-center text-xs font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
+                    <span>
+                      Uploading to{' '}
+                      {activeUploadTarget === 'hero' ? 'Hero Fullscreen Background Photo' : 
+                       activeUploadTarget === 'right' ? 'Top-Right Staggered Portrait' : 
+                       activeUploadTarget === 'left' ? 'Bottom-Left Staggered Portrait' : 
+                       activeUploadTarget === 'dress' ? 'Dress Code Palette Visuals' : 
+                       'Venue Map Illustration Graphic'}...
+                    </span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-stone-200/60 h-2 rounded-full overflow-hidden">
+                    <div className="bg-olive-drab h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Card 1: Hero Cover Photo */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 1: Hero Fullscreen Background Photo
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      The prominent welcome photo supporting clean text styling at the bottom edge of the folding fold.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[16/9] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
+                      <img src={cmsImageUrl} alt="Hero Fullscreen" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'hero');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 2: Top-Right Staggered Portrait */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 2: Top-Right Staggered Portrait
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
+                      <img src={cmsRightPortraitUrl} alt="Top-Right Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'right');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 3: Bottom-Left Staggered Portrait */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 3: Bottom-Left Staggered Portrait
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
+                      <img src={cmsLeftPortraitUrl} alt="Bottom-Left Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'left');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 4: Dress Code Palette Visuals */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 4: Dress Code Color Palette Visuals / Images
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
+                      <img src={cmsDressCodeImageUrl} alt="Dress Code Inspiration" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'dress');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 5: Venue Map Illustration */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 5: Venue Map Illustration Graphic
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow flex items-center justify-center">
+                      {cmsMapImageUrl ? (
+                        <img src={cmsMapImageUrl} alt="Venue Map Override" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="text-center p-4">
+                          <span className="block text-xs text-neutral-400 font-serif italic mb-1">No custom illustration</span>
+                          <span className="text-[9px] tracking-wider uppercase font-sans text-olive-drab font-semibold bg-olive-light/10 px-2 py-0.5 rounded">Active: Fallback SVG Map</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) startUpload(file, 'map');
+                        }}
+                        className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                      />
+                      {cmsMapImageUrl && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm("Are you sure you want to revert to the custom interactive SVG map?")) {
+                              setCmsMapImageUrl('');
+                              setMapImageUrl('');
+                              const docRef = doc(db, 'site_content', 'main');
+                              await setDoc(docRef, { mapImageUrl: '' }, { merge: true });
+                            }
+                          }}
+                          className="text-[9px] font-sans font-bold tracking-widest text-red-700 hover:text-red-900 border border-red-200 bg-red-50 py-1 px-2 rounded hover:bg-red-100 uppercase transition-all duration-200"
+                        >
+                          ✕ Clear Custom & Restore Local SVG
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Future Architectural Guardrail box */}
+              <div className="mt-10 border border-[#DECCA6]/30 p-6 rounded-2xl bg-[#FAF8F5]/90 relative overflow-hidden select-text">
+                <div className="absolute top-0 right-0 p-3 text-[10px] font-mono tracking-widest text-[#B5A57F] bg-[#FAF8F5] select-none border-l border-b border-[#DECCA6]/20">
+                  SEC_ARCH_GUARDRAIL
+                </div>
+                <h3 className="font-serif text-lg font-light text-earth-dark mb-2 flex items-center gap-2">
+                  <span>🔒 Architectural Auto-Registration Guardrail & Protocol</span>
+                </h3>
+                <p className="font-sans text-xs text-[#6E6A5F] leading-relaxed mb-4">
+                  To ensure absolute editability and future-proof design extensibility, any new visual section, functional module, or image asset introduced to this wedding codebase must strictly adhere to the following framework convention:
+                </p>
+                <ul className="space-y-2 text-xs text-[#6E6A5F] font-sans list-disc list-inside">
+                  <li>
+                    <strong className="text-earth-dark font-semibold">Step 1 (Schema Mapping):</strong> Append a default URL property directly into the state list and the initial translations dictionary as local fallbacks.
+                  </li>
+                  <li>
+                    <strong className="text-earth-dark font-semibold">Step 2 (CMS Exposure):</strong> Register a matching file input or uploader target within the <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">startUpload</code> dispatcher, matching one-to-one with its Firestore key identifier.
+                  </li>
+                  <li>
+                    <strong className="text-earth-dark font-semibold">Step 3 (Automated Sync):</strong> The image upload lifecycle automatically routes file payloads to Firebase cloud storage, returns secure access streams, and updates the Firestore <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">site_content/main</code> document, immediately refreshing live previews gracefully without administrative effort.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       )}
     </div>
@@ -1808,111 +2024,127 @@ export default function App() {
         </a>
       </div>
 
+      {/* SECTION 1: THE CLEAN HERO BANNER */}
+      <section 
+        id="hero" 
+        className="h-screen w-full relative bg-cover bg-center bg-no-repeat flex flex-col justify-end items-center pb-24 select-none overflow-hidden"
+        style={{ 
+          backgroundImage: `url(${heroImageUrl})`,
+          backgroundAttachment: 'fixed'
+        }}
+      >
+        {/* Smooth dark dim overlay tint */}
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+
+        {/* Centered names typography at bottom edge of screen fold */}
+        <div className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]">
+          <h1 className="text-[9vw] sm:text-[7vw] lg:text-[4.5vw] font-serif font-light leading-[1.1] tracking-wider text-white drop-shadow-md select-text">
+            {t.weddingName}
+          </h1>
+        </div>
+      </section>
+
       {/* Main Content Lookbook wrapper - meticulously padded */}
       <main className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 lg:pl-32 lg:pr-12 py-12">
         
-        {/* SEC I: HERO SECTION */}
+        {/* SECTION 2: THE COMPACT "THE DATE" AREA */}
         <section 
-          id="hero" 
-          className="min-h-[92vh] flex flex-col justify-between pt-16 pb-24 relative"
+          id="the-date" 
+          className="min-h-[85vh] py-16 relative flex flex-col justify-center items-center scroll-mt-12"
         >
-          {/* Header Accent Meta line */}
-          <div className="flex flex-col gap-2 items-start opacity-0 animate-letter-spacing-unfold">
-            <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none">
-              {t.gatheringHeader}
-            </span>
-            <span className="text-xs font-serif italic text-earth-accent font-light">
-              {t.gatheringSub}
-            </span>
-          </div>
-
-          {/* Core Title (Names of Couple) & Dynamic Image */}
-          <div className="my-auto py-12 md:py-16">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-              <div className="lg:col-span-7">
-                <h1 className="text-[10vw] sm:text-[7vw] lg:text-[5vw] font-serif font-light leading-[1.05] tracking-tight mb-6 select-text">
-                  {t.weddingName}
-                </h1>
-                
-                {/* The Vibe Narrative Block */}
-                <p className="max-w-md font-serif text-lg md:text-xl text-earth-accent font-light leading-relaxed mb-8 select-text">
-                  {t.heroVibeText}
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-6 mt-4 font-sans text-[11px] tracking-[0.25em] text-earth-dark/70">
-                  <div className="flex items-center gap-3">
-                    <span className="text-olive-light">10</span>
-                    <span>{t.october}</span>
-                  </div>
-                  <div className="hidden sm:inline text-earth-dark/20">•</div>
-                  <div className="flex items-center gap-3">
-                    <span>{t.portland}</span>
-                  </div>
-                  <div className="hidden sm:inline text-earth-dark/20">•</div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dynamic Image Canvas Frame */}
-              <div className="lg:col-span-5 flex justify-center">
-                <div className="relative p-2.5 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] group max-w-sm w-full">
-                  <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                    <img 
-                      src={heroImageUrl} 
-                      alt="Gia Bao & John Portrait" 
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
-                  </div>
+          {/* Symmetrical date flanking layout */}
+          <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center justify-center">
+            
+            {/* Supporting left portrait (Sunset Tokyo Tower Image) */}
+            <div className="lg:col-span-3 flex justify-center order-2 lg:order-1 select-text">
+              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
+                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
+                  <img 
+                    src={leftPortraitUrl} 
+                    alt="Sunset Tokyo Tower" 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Minimalist Countdown Timer Section */}
-          <div className="border-t border-earth-dark/10 pt-8 flex grid grid-cols-2 md:grid-cols-4 gap-6 relative">
-            <div className="absolute right-0 top-0 -translate-y-12 block lg:hidden">
-              <MinimalRoseDetail />
-            </div>
+            {/* Central Block: Perfect Center text blocks, dates, and countdown */}
+            <div className="lg:col-span-6 flex flex-col items-center text-center px-4 order-1 lg:order-2 select-text">
+              <div className="flex flex-col gap-2 items-center mb-6">
+                <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none block font-bold select-text">
+                  {t.gatheringHeader}
+                </span>
+                <span className="text-xs font-serif italic text-earth-accent font-light select-text">
+                  {t.gatheringSub}
+                </span>
+              </div>
 
-            {/* Countdown Days */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownDays}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.days}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
+              {/* The Vibe Narrative Block */}
+              <p className="max-w-md font-serif text-base sm:text-lg text-earth-accent font-light leading-relaxed mb-8 select-text">
+                {t.heroVibeText}
+              </p>
+
+              {/* Specific Date & Address details */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center font-sans text-[11px] tracking-[0.25em] text-earth-dark/70 mb-10 select-all border-y border-earth-dark/10 py-4 w-full max-w-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-olive-light font-bold">10</span>
+                  <span className="font-semibold">{t.october}</span>
+                </div>
+                <div className="hidden sm:inline text-earth-dark/20">•</div>
+                <div>{t.portland}</div>
+                <div className="hidden sm:inline text-earth-[#8A9A86]/40">•</div>
+                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
+              </div>
+
+              {/* Minimalist Countdown Timer Section */}
+              <div className="w-full border border-earth-dark/10 p-6 rounded-2xl bg-white/30 backdrop-blur-xs grid grid-cols-4 gap-4 relative">
+                {/* Countdown Days */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownDays}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.days}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
+                </div>
+
+                {/* Countdown Hours */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownHours}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.hours}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
+                </div>
+
+                {/* Countdown Minutes */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownMinutes}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.minutes}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
+                </div>
+
+                {/* Countdown Seconds */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownSeconds}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.seconds}</span>
+                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
+                </div>
               </div>
             </div>
 
-            {/* Countdown Hours */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownHours}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.hours}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
+            {/* Supporting right portrait (Nighttime Couple Image) */}
+            <div className="lg:col-span-3 flex justify-center order-3 select-text">
+              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
+                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
+                  <img 
+                    src={rightPortraitUrl} 
+                    alt="Nighttime Couple" 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
+                </div>
               </div>
             </div>
 
-            {/* Countdown Minutes */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownMinutes}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.minutes}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
-              </div>
-            </div>
-
-            {/* Countdown Seconds */}
-            <div className="flex flex-col">
-              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownSeconds}</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.seconds}</span>
-                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
-              </div>
-            </div>
           </div>
         </section>
 
