@@ -27,107 +27,9 @@ import {
   Filter
 } from 'lucide-react';
 import { db, storage, handleFirestoreError, OperationType } from './firebase';
-import { doc, setDoc, collection, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
-
-// Helper to resolve Google Drive URLs to native direct load links
-const getDirectImageUrl = (url: string, appendCacheBust = false): string => {
-  if (!url) return '';
-  
-  let formatted = url;
-  
-  // Google Drive file ID pattern
-  const driveIdPattern = /\/file\/d\/([a-zA-Z0-9_-]+)/;
-  const driveIdMatch = url.match(driveIdPattern);
-  
-  const driveQueryPattern = /[?&]id=([a-zA-Z0-9_-]+)/;
-  const driveQueryMatch = url.match(driveQueryPattern);
-  
-  const fileId = (driveIdMatch && driveIdMatch[1]) || (driveQueryMatch && driveQueryMatch[1]);
-  
-  if (fileId) {
-    // Transform into a direct export web link per instructions
-    formatted = `https://drive.google.com/uc?export=download&id=${fileId}`;
-  }
-  
-  if (appendCacheBust && formatted && !formatted.startsWith('data:') && !formatted.startsWith('/')) {
-    const separator = formatted.includes('?') ? '&' : '?';
-    formatted = `${formatted}${separator}v=${Date.now()}`;
-  }
-  
-  return formatted;
-};
-
-// Polished reusable image wrapper component with fallback, skeleton, and elegant fade-in transition
-interface CdnImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
-  src: string;
-  fallbackSrc?: string;
-}
-
-const CdnImage: React.FC<CdnImageProps> = ({ src, fallbackSrc, className, alt, ...props }) => {
-  const [imgSrc, setImgSrc] = useState<string>('');
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
-
-  useEffect(() => {
-    if (!src) {
-      if (fallbackSrc) {
-        setImgSrc(fallbackSrc);
-        setStatus('loading');
-      } else {
-        setStatus('error');
-      }
-      return;
-    }
-
-    const formatted = getDirectImageUrl(src, true);
-    setImgSrc(formatted);
-    setStatus('loading');
-  }, [src, fallbackSrc]);
-
-  const handleLoad = () => {
-    setStatus('loaded');
-  };
-
-  const handleError = () => {
-    if (fallbackSrc && imgSrc !== fallbackSrc) {
-      setImgSrc(fallbackSrc);
-    } else {
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div className="relative overflow-hidden w-full h-full bg-stone-100 flex items-center justify-center min-h-[40px]">
-      {status === 'loading' && (
-        <div className="absolute inset-0 bg-neutral-200/50 animate-pulse flex items-center justify-center">
-          <div className="w-5 h-5 border-2 border-stone-400 border-t-transparent rounded-full animate-spin opacity-40" />
-        </div>
-      )}
-
-      {status === 'error' && (
-        <div className="absolute inset-x-0 inset-y-0 bg-stone-100 flex flex-col items-center justify-center p-3 border border-dashed border-stone-200 text-center select-none">
-          <svg className="w-5 h-5 text-stone-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <span className="text-[10px] uppercase tracking-wider text-stone-400 font-sans font-medium">Image unavailable</span>
-        </div>
-      )}
-
-      {imgSrc && (
-        <img
-          src={imgSrc}
-          alt={alt || "Image"}
-          className={`${className || ''} transition-opacity duration-1000 ease-out ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
-          onLoad={handleLoad}
-          onError={handleError}
-          referrerPolicy="no-referrer"
-          {...props}
-        />
-      )}
-    </div>
-  );
-};
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
@@ -240,10 +142,6 @@ export default function App() {
 
   const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
-  const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('/src/assets/images/regenerated_image_1780220158910.jpg');
-  const [rightPortraitUrl, setRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
-  const [dressCodeImageUrl, setDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
-  const [mapImageUrl, setMapImageUrl] = useState<string>('');
   const [paletteColors, setPaletteColors] = useState<string[]>([
     '#DECCA6', // Sand/Gold
     '#C0A080', // Taupe/Beige
@@ -252,27 +150,13 @@ export default function App() {
     '#3D3B36'  // Earth Dark
   ]);
   const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
-  const [isHeroLoaded, setIsHeroLoaded] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!heroImageUrl) return;
-    setIsHeroLoaded(false);
-    const img = new Image();
-    img.src = getDirectImageUrl(heroImageUrl, true);
-    img.onload = () => setIsHeroLoaded(true);
-    img.onerror = () => setIsHeroLoaded(true);
-  }, [heroImageUrl]);
 
   // States for CMS Panel in Admin view
-  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms' | 'images'>('rsvps');
+  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms'>('rsvps');
   const [cmsLang, setCmsLang] = useState<'ENG' | 'VIE'>('ENG');
   const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
-  const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('/src/assets/images/regenerated_image_1780220158910.jpg');
-  const [cmsRightPortraitUrl, setCmsRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
-  const [cmsDressCodeImageUrl, setCmsDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
-  const [cmsMapImageUrl, setCmsMapImageUrl] = useState<string>('');
   const [cmsPaletteColors, setCmsPaletteColors] = useState<string[]>([
     '#DECCA6',
     '#C0A080',
@@ -282,7 +166,6 @@ export default function App() {
   ]);
 
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right' | 'dress' | 'map'>('hero');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -354,12 +237,12 @@ export default function App() {
     document.title = t.weddingTitle;
   }, [lang, t.weddingTitle]);
 
-  // Load and listen to dynamic layout site content in real-time
+  // Fetch dynamic layout site content on mount
   useEffect(() => {
-    const docRef = doc(db, 'site_content', 'main');
-    
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const fetchSiteContent = async () => {
       try {
+        const docRef = doc(db, 'site_content', 'main');
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           const mergedEng = { ...translations.ENG, ...(data.ENG || {}) };
@@ -373,22 +256,6 @@ export default function App() {
             setHeroImageUrl(data.imageUrl);
             setCmsImageUrl(data.imageUrl);
           }
-          if (data.leftPortraitUrl) {
-            setLeftPortraitUrl(data.leftPortraitUrl);
-            setCmsLeftPortraitUrl(data.leftPortraitUrl);
-          }
-          if (data.rightPortraitUrl) {
-            setRightPortraitUrl(data.rightPortraitUrl);
-            setCmsRightPortraitUrl(data.rightPortraitUrl);
-          }
-          if (data.dressCodeImageUrl) {
-            setDressCodeImageUrl(data.dressCodeImageUrl);
-            setCmsDressCodeImageUrl(data.dressCodeImageUrl);
-          }
-          if (data.mapImageUrl !== undefined) {
-            setMapImageUrl(data.mapImageUrl);
-            setCmsMapImageUrl(data.mapImageUrl);
-          }
 
           if (data.paletteColors && Array.isArray(data.paletteColors)) {
             const loadedColors = [...data.paletteColors];
@@ -399,16 +266,12 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Error listening to site_content real-time updates:', err);
+        console.error('Error fetching site_content from Firestore on load:', err);
       } finally {
         setIsContentLoading(false);
       }
-    }, (error) => {
-      console.error('Firestore onSnapshot listener error:', error);
-      setIsContentLoading(false);
-    });
-
-    return () => unsubscribe();
+    };
+    fetchSiteContent();
   }, []);
 
   // Administrative state managers
@@ -566,12 +429,11 @@ export default function App() {
     }
   };
 
-  const startUpload = (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map' = 'hero') => {
+  const startUpload = (file: File) => {
     setIsUploading(true);
-    setActiveUploadTarget(target);
     setUploadProgress(0);
 
-    const storageRef = ref(storage, `site_assets/${target}_portrait_${Date.now()}_${file.name}`);
+    const storageRef = ref(storage, `site_assets/couple_portrait_${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
@@ -588,33 +450,7 @@ export default function App() {
       async () => {
         try {
           const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-
-          // Overwrite immediately in Firestore with merge support
-          let fieldKey = 'imageUrl';
-          if (target === 'left') fieldKey = 'leftPortraitUrl';
-          else if (target === 'right') fieldKey = 'rightPortraitUrl';
-          else if (target === 'dress') fieldKey = 'dressCodeImageUrl';
-          else if (target === 'map') fieldKey = 'mapImageUrl';
-
-          const docRef = doc(db, 'site_content', 'main');
-          await setDoc(docRef, { [fieldKey]: downloadUrl }, { merge: true });
-
-          if (target === 'hero') {
-            setCmsImageUrl(downloadUrl);
-            setHeroImageUrl(downloadUrl);
-          } else if (target === 'left') {
-            setCmsLeftPortraitUrl(downloadUrl);
-            setLeftPortraitUrl(downloadUrl);
-          } else if (target === 'right') {
-            setCmsRightPortraitUrl(downloadUrl);
-            setRightPortraitUrl(downloadUrl);
-          } else if (target === 'dress') {
-            setCmsDressCodeImageUrl(downloadUrl);
-            setDressCodeImageUrl(downloadUrl);
-          } else if (target === 'map') {
-            setCmsMapImageUrl(downloadUrl);
-            setMapImageUrl(downloadUrl);
-          }
+          setCmsImageUrl(downloadUrl);
           setIsUploading(false);
         } catch (err: any) {
           console.error('Error getting download URL:', err);
@@ -637,10 +473,6 @@ export default function App() {
         ENG: cmsTranslations.ENG,
         VIE: cmsTranslations.VIE,
         imageUrl: cmsImageUrl,
-        leftPortraitUrl: cmsLeftPortraitUrl,
-        rightPortraitUrl: cmsRightPortraitUrl,
-        dressCodeImageUrl: cmsDressCodeImageUrl,
-        mapImageUrl: cmsMapImageUrl,
         paletteColors: cmsPaletteColors,
         updatedAt: new Date().toISOString(),
       });
@@ -648,10 +480,6 @@ export default function App() {
       // Update active live states of the landing page
       setSiteContent(cmsTranslations);
       setHeroImageUrl(cmsImageUrl);
-      setLeftPortraitUrl(cmsLeftPortraitUrl);
-      setRightPortraitUrl(cmsRightPortraitUrl);
-      setDressCodeImageUrl(cmsDressCodeImageUrl);
-      setMapImageUrl(cmsMapImageUrl);
       setPaletteColors(cmsPaletteColors);
 
       setSaveStatus('saved');
@@ -1183,7 +1011,7 @@ export default function App() {
             </header>
 
             {/* Sub-navigation Tab Selector */}
-            <div className="flex border-b border-earth-dark/10 mb-8 gap-6 overflow-x-auto whitespace-nowrap">
+            <div className="flex border-b border-earth-dark/10 mb-8 gap-6">
               <button
                 type="button"
                 onClick={() => setAdminTab('rsvps')}
@@ -1206,17 +1034,6 @@ export default function App() {
               >
                 Website Content (CMS)
               </button>
-              <button
-                type="button"
-                onClick={() => setAdminTab('images')}
-                className={`pb-3 text-xs tracking-[0.2em] font-sans font-bold uppercase cursor-pointer border-b-2 transition-all duration-300 ${
-                  adminTab === 'images'
-                    ? 'border-olive-drab text-[#5E5B52]'
-                    : 'border-transparent text-[#6E6A5F]/60 hover:text-earth-dark font-medium'
-                }`}
-              >
-                🖼️ Global Image Assets Registry
-              </button>
             </div>
 
             {/* Error alerts if firebase collection can't load */}
@@ -1227,7 +1044,7 @@ export default function App() {
               </div>
             )}
 
-            {adminTab === 'rsvps' && (
+            {adminTab === 'rsvps' ? (
               <>
                 {/* Summary KPI Grid */}
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -1471,12 +1288,83 @@ export default function App() {
               </div>
             </div>
           </>
-        )}
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+            {/* Left Column: Image Asset Swap / Firebase Storage Section */}
+            <div className="lg:col-span-4 flex flex-col gap-6">
+              <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 shadow-xs text-left">
+                <h2 className="font-serif text-lg font-light text-earth-dark mb-4 pb-2 border-b border-earth-dark/5 select-text">
+                  I. Homepage Portrait Swap
+                </h2>
+                <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed mb-4 select-text">
+                  Update the main featured picture on the landing page of the wedding. Drag-and-drop or choose a new .jpg/.png portrait asset.
+                </p>
 
-        {adminTab === 'cms' && (
-          <div className="grid grid-cols-1 gap-8 mt-4">
-            {/* Full Width Column: Web Content Modification Form */}
-            <div className="w-full">
+                {/* Drag and Drop Zone */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`relative border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] ${
+                    isDragging 
+                      ? 'border-olive-drab bg-olive-light/10 scale-[0.99] shadow-inner' 
+                      : 'border-earth-dark/20 hover:border-olive-drab bg-white/30'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="cms-file-upload"
+                    onChange={handleImageFileChange}
+                    accept="image/*"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    title=""
+                  />
+                  <Smile size={24} className="text-earth-dark/40 mb-3 animate-bounce" />
+                  <span className="font-sans text-xs font-semibold text-earth-dark uppercase tracking-widest block mb-1">
+                    FILE DROP ZONE
+                  </span>
+                  <span className="font-serif text-[11px] text-[#6E6A5F] italic">
+                    Or click to choose image file
+                  </span>
+                </div>
+
+                {/* Upload progress feedback */}
+                {isUploading && (
+                  <div className="mt-4 p-3 bg-stone-100 rounded-xl border border-earth-dark/5">
+                    <div className="flex justify-between items-center text-[10px] font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
+                      <span>Uploading image...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-olive-drab h-full rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview Current Image Block */}
+                <div className="mt-6">
+                  <span className="font-sans text-[9px] tracking-widest text-[#6E6A5F] uppercase block mb-3 font-semibold">
+                    ACTIVE IMAGE PORTRAIT PREVIEW:
+                  </span>
+                  <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.02)] w-full">
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100">
+                      <img 
+                        src={cmsImageUrl} 
+                        alt="CMS Preview Portal" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Web Content Modification Form */}
+            <div className="lg:col-span-8">
               <form onSubmit={handleSaveCmsContent} className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col gap-6 text-left">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-earth-dark/5 pb-4">
                   <div>
@@ -1776,357 +1664,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {adminTab === 'images' && (
-          <div className="flex flex-col gap-8 mt-4">
-            <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs text-left">
-              <div className="border-b border-earth-dark/5 pb-4 mb-6">
-                <h2 className="font-serif text-2xl font-light text-earth-dark flex items-center gap-2 select-text">
-                  <span>🖼️ Global Image Assets Registry</span>
-                </h2>
-                <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
-                  All image inputs utilize direct Cloud integration. Uploading instantly stores artifacts securely in Firebase Storage, generates a permanent signature link, and overwrites the active site property inside document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-olive-drab">site_content/main</code>. Live previews will render immediately.
-                </p>
-              </div>
-
-              {/* Active Global Progress Indicator inside the workspace */}
-              {isUploading && (
-                <div className="p-4 mb-6 bg-olive-light/10 rounded-xl border border-olive-light/25 animate-pulse">
-                  <div className="flex justify-between items-center text-xs font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
-                    <span>
-                      Uploading to{' '}
-                      {activeUploadTarget === 'hero' ? 'Hero Fullscreen Background Photo' : 
-                       activeUploadTarget === 'right' ? 'Top-Right Staggered Portrait' : 
-                       activeUploadTarget === 'left' ? 'Bottom-Left Staggered Portrait' : 
-                       activeUploadTarget === 'dress' ? 'Dress Code Palette Visuals' : 
-                       'Venue Map Illustration Graphic'}...
-                    </span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-stone-200/60 h-2 rounded-full overflow-hidden">
-                    <div className="bg-olive-drab h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Card 1: Hero Cover Photo */}
-                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 1: Hero Fullscreen Background Photo
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      The prominent welcome photo supporting clean text styling at the bottom edge of the folding fold.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div className="relative rounded-lg overflow-hidden aspect-[16/9] bg-stone-100 hover:shadow-inner transition-shadow">
-                      <CdnImage src={cmsImageUrl} fallbackSrc="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200" alt="Hero Fullscreen" className="w-full h-full object-cover" />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
-                      <input 
-                        type="text"
-                        value={cmsImageUrl}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          setCmsImageUrl(val);
-                          setHeroImageUrl(val);
-                          const docRef = doc(db, 'site_content', 'main');
-                          await setDoc(docRef, { imageUrl: val }, { merge: true });
-                        }}
-                        placeholder="Paste image link or Google Drive link..."
-                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
-                      />
-                      <span className="text-[10px] text-neutral-500 leading-tight">
-                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
-                      <hr className="grow border-earth-dark/5" />
-                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
-                      <hr className="grow border-earth-dark/5" />
-                    </div>
-
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'hero');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Card 2: Top-Right Staggered Portrait */}
-                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 2: Top-Right Staggered Portrait
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
-                      <CdnImage src={cmsRightPortraitUrl} fallbackSrc="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600" alt="Top-Right Portrait" className="w-full h-full object-cover" />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
-                      <input 
-                        type="text"
-                        value={cmsRightPortraitUrl}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          setCmsRightPortraitUrl(val);
-                          setRightPortraitUrl(val);
-                          const docRef = doc(db, 'site_content', 'main');
-                          await setDoc(docRef, { rightPortraitUrl: val }, { merge: true });
-                        }}
-                        placeholder="Paste image link or Google Drive link..."
-                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
-                      />
-                      <span className="text-[10px] text-neutral-500 leading-tight">
-                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
-                      <hr className="grow border-earth-dark/5" />
-                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
-                      <hr className="grow border-earth-dark/5" />
-                    </div>
-
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'right');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Card 3: Bottom-Left Staggered Portrait */}
-                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 3: Bottom-Left Staggered Portrait
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
-                      <CdnImage src={cmsLeftPortraitUrl} fallbackSrc="/src/assets/images/regenerated_image_1780220158910.jpg" alt="Bottom-Left Portrait" className="w-full h-full object-cover" />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
-                      <input 
-                        type="text"
-                        value={cmsLeftPortraitUrl}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          setCmsLeftPortraitUrl(val);
-                          setLeftPortraitUrl(val);
-                          const docRef = doc(db, 'site_content', 'main');
-                          await setDoc(docRef, { leftPortraitUrl: val }, { merge: true });
-                        }}
-                        placeholder="Paste image link or Google Drive link..."
-                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
-                      />
-                      <span className="text-[10px] text-neutral-500 leading-tight">
-                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
-                      <hr className="grow border-earth-dark/5" />
-                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
-                      <hr className="grow border-earth-dark/5" />
-                    </div>
-
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'left');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Card 4: Dress Code Palette Visuals */}
-                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                      Part 4: Dress Code Color Palette Visuals / Images
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] bg-stone-100 hover:shadow-inner transition-shadow">
-                      <CdnImage src={cmsDressCodeImageUrl} fallbackSrc="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600" alt="Dress Code Inspiration" className="w-full h-full object-cover" />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
-                      <input 
-                        type="text"
-                        value={cmsDressCodeImageUrl}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          setCmsDressCodeImageUrl(val);
-                          setDressCodeImageUrl(val);
-                          const docRef = doc(db, 'site_content', 'main');
-                          await setDoc(docRef, { dressCodeImageUrl: val }, { merge: true });
-                        }}
-                        placeholder="Paste image link or Google Drive link..."
-                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
-                      />
-                      <span className="text-[10px] text-neutral-500 leading-tight">
-                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
-                      <hr className="grow border-earth-dark/5" />
-                      <span>OR SELECT LOCAL FILE UNDERNEATH</span>
-                      <hr className="grow border-earth-dark/5" />
-                    </div>
-
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'dress');
-                      }}
-                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Card 5: Venue Map Illustration */}
-                <div className="border border-earth-dark/10 p-5 rounded-2xl relative bg-white/40 select-text flex flex-col justify-between shadow-xs">
-                  <div>
-                    <span className="font-sans text-[10px] font-bold tracking-wider text-[#8A9A86] uppercase block mb-1">
-                      Part 5: Venue Map Illustration Graphic
-                    </span>
-                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
-                      Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] bg-stone-100 hover:shadow-inner transition-shadow flex items-center justify-center">
-                      {cmsMapImageUrl ? (
-                        <CdnImage src={cmsMapImageUrl} alt="Venue Map Override" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-center p-4">
-                          <span className="block text-xs text-neutral-400 font-serif italic mb-1">No custom illustration</span>
-                          <span className="text-[9px] tracking-wider uppercase font-sans text-olive-drab font-semibold bg-olive-light/10 px-2 py-0.5 rounded">Active: Fallback SVG Map</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-earth-dark">Direct Image URL / Source</label>
-                      <input 
-                        type="text"
-                        value={cmsMapImageUrl}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          setCmsMapImageUrl(val);
-                          setMapImageUrl(val);
-                          const docRef = doc(db, 'site_content', 'main');
-                          await setDoc(docRef, { mapImageUrl: val }, { merge: true });
-                        }}
-                        placeholder="Paste image link or Google Drive link..."
-                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-earth-dark/15 rounded-md focus:outline-none focus:border-olive-drab text-neutral-800"
-                      />
-                      <span className="text-[10px] text-neutral-500 leading-tight">
-                        Paste direct image links or Google Drive direct links using the format: <span className="font-mono text-[9px] bg-stone-100/90 px-1 py-0.5 rounded text-neutral-800 break-all select-all">https://lh3.googleusercontent.com/d/IMAGE_ID</span> (Make sure the Drive file permission is set to 'Anyone with the link').
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 my-1 text-[8px] font-bold text-earth-accent/30 uppercase tracking-widest select-none">
-                      <hr className="grow border-earth-dark/5" />
-                      <span>OR CHOOSE ACTIONS UNDERNEATH</span>
-                      <hr className="grow border-earth-dark/5" />
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) startUpload(file, 'map');
-                        }}
-                        className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
-                      />
-                      {cmsMapImageUrl && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (window.confirm("Are you sure you want to revert to the custom interactive SVG map?")) {
-                              setCmsMapImageUrl('');
-                              setMapImageUrl('');
-                              const docRef = doc(db, 'site_content', 'main');
-                              await setDoc(docRef, { mapImageUrl: '' }, { merge: true });
-                            }
-                          }}
-                          className="text-[9px] font-sans font-bold tracking-widest text-red-700 hover:text-red-900 border border-red-200 bg-red-50 py-1.5 px-2 rounded-lg hover:bg-red-100 uppercase transition-all duration-200 cursor-pointer"
-                        >
-                          ✕ Clear Custom & Restore Local SVG
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Future Architectural Guardrail box */}
-              <div className="mt-10 border border-[#DECCA6]/30 p-6 rounded-2xl bg-[#FAF8F5]/90 relative overflow-hidden select-text">
-                <div className="absolute top-0 right-0 p-3 text-[10px] font-mono tracking-widest text-[#B5A57F] bg-[#FAF8F5] select-none border-l border-b border-[#DECCA6]/20">
-                  SEC_ARCH_GUARDRAIL
-                </div>
-                <h3 className="font-serif text-lg font-light text-earth-dark mb-2 flex items-center gap-2">
-                  <span>🔒 Architectural Auto-Registration Guardrail & Protocol</span>
-                </h3>
-                <p className="font-sans text-xs text-[#6E6A5F] leading-relaxed mb-4">
-                  To ensure absolute editability and future-proof design extensibility, any new visual section, functional module, or image asset introduced to this wedding codebase must strictly adhere to the following framework convention:
-                </p>
-                <ul className="space-y-2 text-xs text-[#6E6A5F] font-sans list-disc list-inside">
-                  <li>
-                    <strong className="text-earth-dark font-semibold">Step 1 (Schema Mapping):</strong> Append a default URL property directly into the state list and the initial translations dictionary as local fallbacks.
-                  </li>
-                  <li>
-                    <strong className="text-earth-dark font-semibold">Step 2 (CMS Exposure):</strong> Register a matching file input or uploader target within the <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">startUpload</code> dispatcher, matching one-to-one with its Firestore key identifier.
-                  </li>
-                  <li>
-                    <strong className="text-earth-dark font-semibold">Step 3 (Automated Sync):</strong> The image upload lifecycle automatically routes file payloads to Firebase cloud storage, returns secure access streams, and updates the Firestore <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">site_content/main</code> document, immediately refreshing live previews gracefully without administrative effort.
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
       )}
     </div>
@@ -2271,137 +1808,111 @@ export default function App() {
         </a>
       </div>
 
-      {/* SECTION 1: THE CLEAN HERO BANNER */}
-      <section 
-        id="hero" 
-        className="h-screen w-full relative flex flex-col justify-end items-center pb-24 select-none overflow-hidden bg-stone-100"
-      >
-        {/* Cached and resolved background layer */}
-        <div 
-          className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ease-out ${isHeroLoaded ? 'opacity-100' : 'opacity-0'}`}
-          style={{ 
-            backgroundImage: `url(${getDirectImageUrl(heroImageUrl, true)})`,
-            backgroundAttachment: 'fixed'
-          }}
-        />
-
-        {/* Dynamic lightweight micro-shimmer fallback loading skeleton background */}
-        {!isHeroLoaded && (
-          <div className="absolute inset-0 bg-neutral-200/55 animate-pulse flex items-center justify-center">
-            <div className="w-10 h-10 border-4 border-stone-300 border-t-transparent rounded-full animate-spin opacity-30" />
-          </div>
-        )}
-
-        {/* Smooth dark dim overlay tint */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
-
-        {/* Centered names typography at bottom edge of screen fold */}
-        <div className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]">
-          <h1 className="text-[9vw] sm:text-[7vw] lg:text-[4.5vw] font-serif font-light leading-[1.1] tracking-wider text-white drop-shadow-md select-text">
-            {t.weddingName}
-          </h1>
-        </div>
-      </section>
-
       {/* Main Content Lookbook wrapper - meticulously padded */}
       <main className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 lg:pl-32 lg:pr-12 py-12">
         
-        {/* SECTION 2: THE COMPACT "THE DATE" AREA */}
+        {/* SEC I: HERO SECTION */}
         <section 
-          id="the-date" 
-          className="min-h-[85vh] py-16 relative flex flex-col justify-center items-center scroll-mt-12"
+          id="hero" 
+          className="min-h-[92vh] flex flex-col justify-between pt-16 pb-24 relative"
         >
-          {/* Symmetrical date flanking layout */}
-          <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center justify-center">
-            
-            {/* Supporting left portrait (Sunset Tokyo Tower Image) */}
-            <div className="lg:col-span-3 flex justify-center order-2 lg:order-1 select-text">
-              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
-                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                  <CdnImage 
-                    src={leftPortraitUrl} 
-                    alt="Sunset Tokyo Tower" 
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                  />
-                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
+          {/* Header Accent Meta line */}
+          <div className="flex flex-col gap-2 items-start opacity-0 animate-letter-spacing-unfold">
+            <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none">
+              {t.gatheringHeader}
+            </span>
+            <span className="text-xs font-serif italic text-earth-accent font-light">
+              {t.gatheringSub}
+            </span>
+          </div>
+
+          {/* Core Title (Names of Couple) & Dynamic Image */}
+          <div className="my-auto py-12 md:py-16">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+              <div className="lg:col-span-7">
+                <h1 className="text-[10vw] sm:text-[7vw] lg:text-[5vw] font-serif font-light leading-[1.05] tracking-tight mb-6 select-text">
+                  {t.weddingName}
+                </h1>
+                
+                {/* The Vibe Narrative Block */}
+                <p className="max-w-md font-serif text-lg md:text-xl text-earth-accent font-light leading-relaxed mb-8 select-text">
+                  {t.heroVibeText}
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-6 mt-4 font-sans text-[11px] tracking-[0.25em] text-earth-dark/70">
+                  <div className="flex items-center gap-3">
+                    <span className="text-olive-light">10</span>
+                    <span>{t.october}</span>
+                  </div>
+                  <div className="hidden sm:inline text-earth-dark/20">•</div>
+                  <div className="flex items-center gap-3">
+                    <span>{t.portland}</span>
+                  </div>
+                  <div className="hidden sm:inline text-earth-dark/20">•</div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Image Canvas Frame */}
+              <div className="lg:col-span-5 flex justify-center">
+                <div className="relative p-2.5 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] group max-w-sm w-full">
+                  <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
+                    <img 
+                      src={heroImageUrl} 
+                      alt="Gia Bao & John Portrait" 
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Central Block: Perfect Center text blocks, dates, and countdown */}
-            <div className="lg:col-span-6 flex flex-col items-center text-center px-4 order-1 lg:order-2 select-text">
-              <div className="flex flex-col gap-2 items-center mb-6">
-                <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none block font-bold select-text">
-                  {t.gatheringHeader}
-                </span>
-                <span className="text-xs font-serif italic text-earth-accent font-light select-text">
-                  {t.gatheringSub}
-                </span>
-              </div>
+          {/* Minimalist Countdown Timer Section */}
+          <div className="border-t border-earth-dark/10 pt-8 flex grid grid-cols-2 md:grid-cols-4 gap-6 relative">
+            <div className="absolute right-0 top-0 -translate-y-12 block lg:hidden">
+              <MinimalRoseDetail />
+            </div>
 
-              {/* The Vibe Narrative Block */}
-              <p className="max-w-md font-serif text-base sm:text-lg text-earth-accent font-light leading-relaxed mb-8 select-text">
-                {t.heroVibeText}
-              </p>
-
-              {/* Specific Date & Address details */}
-              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center font-sans text-[11px] tracking-[0.25em] text-earth-dark/70 mb-10 select-all border-y border-earth-dark/10 py-4 w-full max-w-md">
-                <div className="flex items-center gap-2">
-                  <span className="text-olive-light font-bold">10</span>
-                  <span className="font-semibold">{t.october}</span>
-                </div>
-                <div className="hidden sm:inline text-earth-dark/20">•</div>
-                <div>{t.portland}</div>
-                <div className="hidden sm:inline text-earth-[#8A9A86]/40">•</div>
-                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
-              </div>
-
-              {/* Minimalist Countdown Timer Section */}
-              <div className="w-full border border-earth-dark/10 p-6 rounded-2xl bg-white/30 backdrop-blur-xs grid grid-cols-4 gap-4 relative">
-                {/* Countdown Days */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownDays}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.days}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
-                </div>
-
-                {/* Countdown Hours */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownHours}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.hours}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
-                </div>
-
-                {/* Countdown Minutes */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownMinutes}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.minutes}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
-                </div>
-
-                {/* Countdown Seconds */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownSeconds}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.seconds}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
-                </div>
+            {/* Countdown Days */}
+            <div className="flex flex-col">
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownDays}</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.days}</span>
+                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
               </div>
             </div>
 
-            {/* Supporting right portrait (Nighttime Couple Image) */}
-            <div className="lg:col-span-3 flex justify-center order-3 select-text">
-              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
-                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                  <CdnImage 
-                    src={rightPortraitUrl} 
-                    alt="Nighttime Couple" 
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                  />
-                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
-                </div>
+            {/* Countdown Hours */}
+            <div className="flex flex-col">
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownHours}</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.hours}</span>
+                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
               </div>
             </div>
 
+            {/* Countdown Minutes */}
+            <div className="flex flex-col">
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownMinutes}</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.minutes}</span>
+                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
+              </div>
+            </div>
+
+            {/* Countdown Seconds */}
+            <div className="flex flex-col">
+              <span className="text-xs tracking-[0.2em] font-sans text-earth-accent uppercase mb-2">{t.countdownSeconds}</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif text-2xl md:text-3xl font-light">{countdown.seconds}</span>
+                <span className="text-[10px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -2462,131 +1973,121 @@ export default function App() {
                   <span>{t.interactiveMapBadge}</span>
                 </div>
 
-                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map or Custom Map Illustration */}
-                {mapImageUrl ? (
-                  <div className="w-full aspect-[5/4] relative bg-stone-100 rounded-xl overflow-hidden border border-earth-dark/10 p-1 bg-white shadow-inner">
-                    <CdnImage 
-                      src={mapImageUrl} 
-                      alt="Custom venue map illustration"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  </div>
-                ) : (
-                  <svg 
-                    viewBox="0 0 500 400" 
-                    className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
-                    aria-label="Scenic hand-drawn grounds map"
-                  >
-                    {/* Fine vintage grid lines underneath */}
-                    <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
-                      <line x1="100" y1="0" x2="100" y2="400" />
-                      <line x1="200" y1="0" x2="200" y2="400" />
-                      <line x1="300" y1="0" x2="300" y2="400" />
-                      <line x1="400" y1="0" x2="400" y2="400" />
-                      <line x1="0" y1="100" x2="500" y2="100" />
-                      <line x1="0" y1="200" x2="500" y2="200" />
-                      <line x1="0" y1="300" x2="500" y2="300" />
-                    </g>
+                {/* Elegant Hand-Drawn Minimalist Procedural Vector Map */}
+                <svg 
+                  viewBox="0 0 500 400" 
+                  className="w-full h-auto stroke-earth-dark fill-none stroke-[1.1] rounded-xl bg-[#F3F2EE]"
+                  aria-label="Scenic hand-drawn grounds map"
+                >
+                  {/* Fine vintage grid lines underneath */}
+                  <g className="stroke-earth-dark/[0.04] stroke-[0.5]">
+                    <line x1="100" y1="0" x2="100" y2="400" />
+                    <line x1="200" y1="0" x2="200" y2="400" />
+                    <line x1="300" y1="0" x2="300" y2="400" />
+                    <line x1="400" y1="0" x2="400" y2="400" />
+                    <line x1="0" y1="100" x2="500" y2="100" />
+                    <line x1="0" y1="200" x2="500" y2="200" />
+                    <line x1="0" y1="300" x2="500" y2="300" />
+                  </g>
 
-                    {/* Contour land wave lines */}
-                    {contours.map((pathStr, index) => (
-                      <path 
-                        key={index} 
-                        d={pathStr} 
-                        className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
-                      />
-                    ))}
+                  {/* Contour land wave lines */}
+                  {contours.map((pathStr, index) => (
+                    <path 
+                      key={index} 
+                      d={pathStr} 
+                      className="stroke-earth-dark/10 stroke-[0.7] stroke-dasharray-[3,6]" 
+                    />
+                  ))}
+                  
+                  {/* Organic river fork flowing across */}
+                  <path 
+                    d={riverPath} 
+                    className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
+                  />
+                  <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
+                    <text 
+                      x="0" 
+                      y="0" 
+                      transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
+                      className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
+                    >
+                      {t.mapSiletzRiver}
+                    </text>
+                  </g>
+
+                  {/* Ground pathway - winding/meandering forest pass */}
+                  <path 
+                    d={roadPath} 
+                    className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
+                  />
+                  <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
+                    <text 
+                      x="0" 
+                      y="0" 
+                      transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
+                      className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
+                    >
+                      {t.mapForestPass}
+                    </text>
+                  </g>
+
+                  {/* Secondary light connection path between sites */}
+                  <path 
+                    d={path1} 
+                    className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
+                  />
+
+                  {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
+                  {pines.map((p, idx) => (
+                    <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
+                      <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
+                      <path d="M -3,-1 L 0,-5 L 3,-1" />
+                    </g>
+                  ))}
+
+                  {/* Compass star motif in top left */}
+                  <g transform="translate(55, 65)">
+                    <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
+                    <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
+                    <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
+                    <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
+                    <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
+                  </g>
+
+                  {/* Landmark Pin 1 Callout Card */}
+                  <g transform={`translate(${x1}, ${y1})`}>
+                    <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
+                    <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
                     
-                    {/* Organic river fork flowing across */}
-                    <path 
-                      d={riverPath} 
-                      className="stroke-[#9AA996]/55 stroke-[2] opacity-70" 
-                    />
-                    <g transform={`translate(${getSeededValue(mapSeed + 40, 230, 310)}, ${getSeededValue(mapSeed + 41, 100, 150)})`}>
-                      <text 
-                        x="0" 
-                        y="0" 
-                        transform={`rotate(${getSeededValue(mapSeed + 42, -10, 15)})`}
-                        className="font-serif italic text-[9.5px] fill-[#8A9A86] font-light stroke-none tracking-wide select-none"
-                      >
-                        {t.mapSiletzRiver}
-                      </text>
-                    </g>
-
-                    {/* Ground pathway - winding/meandering forest pass */}
-                    <path 
-                      d={roadPath} 
-                      className="stroke-earth-dark/30 stroke-[1] stroke-dasharray-[4,4]" 
-                    />
-                    <g transform={`translate(${getSeededValue(mapSeed + 43, 70, 110)}, ${getSeededValue(mapSeed + 44, 280, 330)})`}>
-                      <text 
-                        x="0" 
-                        y="0" 
-                        transform={`rotate(${getSeededValue(mapSeed + 45, -65, -45)})`}
-                        className="font-sans text-[7.5px] tracking-[0.2em] font-medium fill-earth-dark/60 uppercase stroke-none select-none"
-                      >
-                        {t.mapForestPass}
-                      </text>
-                    </g>
-
-                    {/* Secondary light connection path between sites */}
-                    <path 
-                      d={path1} 
-                      className="stroke-earth-dark/15 stroke-[0.8] stroke-dasharray-[2,3]" 
-                    />
-
-                    {/* Dynamic hand-drawn organic wireframe pine trees on map sides */}
-                    {pines.map((p, idx) => (
-                      <g key={idx} transform={`translate(${p.x}, ${p.y}) scale(${p.scale})`} className="stroke-earth-dark/40 stroke-[0.8]">
-                        <path d="M 0,14 L 0,-6 M -4,2 L 0,-2 L 4,2" />
-                        <path d="M -3,-1 L 0,-5 L 3,-1" />
-                      </g>
-                    ))}
-
-                    {/* Compass star motif in top left */}
-                    <g transform="translate(55, 65)">
-                      <circle cx="0" cy="0" r="16" className="stroke-earth-dark/10 stroke-[0.8]" />
-                      <path d="M 0,-20 L 0,20 M -20,0 L 20,0" className="stroke-earth-dark/20 stroke-[0.5]" />
-                      <polygon points="0,-14 3.5,0 0,2 0,-14" className="fill-earth-dark stroke-none" />
-                      <polygon points="0,14 -3.5,0 0,-2 0,14" className="fill-earth-accent/70 stroke-none" />
-                      <text x="0" y="-23" textAnchor="middle" className="font-sans text-[8px] font-bold fill-earth-dark stroke-none tracking-widest">N</text>
-                    </g>
-
-                    {/* Landmark Pin 1 Callout Card */}
-                    <g transform={`translate(${x1}, ${y1})`}>
-                      <circle cx="0" cy="0" r="14" className="stroke-olive-drab/30 stroke-[0.8] fill-none animate-[ping_4.5s_infinite_ease-in-out]" />
-                      <circle cx="0" cy="0" r="5" className="fill-olive-drab stroke-white stroke-[0.8]" />
+                    {/* Hover container box */}
+                    <g transform="translate(14, -22)" className="cursor-default">
+                      {/* White-cream callout frame with shadow */}
+                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                      {/* Color marker column bar */}
+                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
                       
-                      {/* Hover container box */}
-                      <g transform="translate(14, -22)" className="cursor-default">
-                        {/* White-cream callout frame with shadow */}
-                        <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
-                        {/* Color marker column bar */}
-                        <rect x="0" y="0" width="3" height="42" rx="1" className="fill-olive-drab" />
-                        
-                        <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
-                        <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
-                      </g>
+                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapWestRidgeLabel}</text>
+                      <text x="12" y="31" className="font-serif italic text-[9px] fill-earth-accent stroke-none font-light">{t.mapWestRidgeSub}</text>
                     </g>
+                  </g>
 
-                    {/* Landmark Pin 2 Callout Card */}
-                    <g transform={`translate(${x2}, ${y2})`}>
-                      <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
-                      <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
+                  {/* Landmark Pin 2 Callout Card */}
+                  <g transform={`translate(${x2}, ${y2})`}>
+                    <circle cx="0" cy="0" r="14" className="stroke-earth-accent/30 stroke-[0.8] fill-none animate-[ping_6s_infinite_ease-in-out]" />
+                    <circle cx="0" cy="0" r="5" className="fill-earth-accent stroke-white stroke-[0.8]" />
+                    
+                    {/* Hover container box */}
+                    <g transform="translate(14, -22)" className="cursor-default">
+                      {/* White-cream callout frame with shadow */}
+                      <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
+                      {/* Color marker column bar */}
+                      <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
                       
-                      {/* Hover container box */}
-                      <g transform="translate(14, -22)" className="cursor-default">
-                        {/* White-cream callout frame with shadow */}
-                        <rect x="0" y="0" width="160" height="42" rx="4" className="fill-[#FAF8F5]/98 stroke-earth-dark/12 stroke-[0.8] shadow-sm" />
-                        {/* Color marker column bar */}
-                        <rect x="0" y="0" width="3" height="42" rx="1" className="fill-earth-accent" />
-                        
-                        <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
-                        <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
-                      </g>
+                      <text x="12" y="17" className="font-sans text-[10px] font-bold fill-earth-dark tracking-wider stroke-none">{t.mapGlassBarnLabel}</text>
+                      <text x="12" y="31" className="font-serif italic text-[9px] fill-olive-drab stroke-none font-light">{t.mapGlassBarnSub}</text>
                     </g>
-                  </svg>
-                )}
+                  </g>
+                </svg>
 
                 {/* Bottom Coordinates & Navigation Bar */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-xs text-earth-accent font-light">
@@ -2711,18 +2212,6 @@ export default function App() {
                     {t.dressCodeGuidelinesDesc}
                   </p>
                 </div>
-
-                {/* Dynamic Dress Code Inspiration Picture */}
-                {dressCodeImageUrl && (
-                  <div className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-stone-100 max-h-[280px] border border-earth-dark/10 p-1.5 bg-white shadow-xs">
-                    <CdnImage 
-                      src={dressCodeImageUrl} 
-                      fallbackSrc="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600"
-                      alt="Dress Code Visual Inspiration mood board"
-                      className="w-full h-full object-cover rounded-xl"
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Right Palette circle list: 5 cols */}
