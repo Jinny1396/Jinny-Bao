@@ -144,6 +144,8 @@ export default function App() {
   const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
   const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
   const [rightPortraitUrl, setRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
+  const [dressCodeImageUrl, setDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
+  const [mapImageUrl, setMapImageUrl] = useState<string>('');
   const [paletteColors, setPaletteColors] = useState<string[]>([
     '#DECCA6', // Sand/Gold
     '#C0A080', // Taupe/Beige
@@ -154,13 +156,15 @@ export default function App() {
   const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
 
   // States for CMS Panel in Admin view
-  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms'>('rsvps');
+  const [adminTab, setAdminTab] = useState<'rsvps' | 'cms' | 'images'>('rsvps');
   const [cmsLang, setCmsLang] = useState<'ENG' | 'VIE'>('ENG');
   const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
   const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
   const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
   const [cmsRightPortraitUrl, setCmsRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
+  const [cmsDressCodeImageUrl, setCmsDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
+  const [cmsMapImageUrl, setCmsMapImageUrl] = useState<string>('');
   const [cmsPaletteColors, setCmsPaletteColors] = useState<string[]>([
     '#DECCA6',
     '#C0A080',
@@ -170,7 +174,7 @@ export default function App() {
   ]);
 
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right'>('hero');
+  const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right' | 'dress' | 'map'>('hero');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -268,6 +272,14 @@ export default function App() {
           if (data.rightPortraitUrl) {
             setRightPortraitUrl(data.rightPortraitUrl);
             setCmsRightPortraitUrl(data.rightPortraitUrl);
+          }
+          if (data.dressCodeImageUrl) {
+            setDressCodeImageUrl(data.dressCodeImageUrl);
+            setCmsDressCodeImageUrl(data.dressCodeImageUrl);
+          }
+          if (data.mapImageUrl) {
+            setMapImageUrl(data.mapImageUrl);
+            setCmsMapImageUrl(data.mapImageUrl);
           }
 
           if (data.paletteColors && Array.isArray(data.paletteColors)) {
@@ -442,7 +454,7 @@ export default function App() {
     }
   };
 
-  const startUpload = (file: File, target: 'hero' | 'left' | 'right' = 'hero') => {
+  const startUpload = (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map' = 'hero') => {
     setIsUploading(true);
     setActiveUploadTarget(target);
     setUploadProgress(0);
@@ -464,12 +476,32 @@ export default function App() {
       async () => {
         try {
           const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+
+          // Overwrite immediately in Firestore with merge support
+          let fieldKey = 'imageUrl';
+          if (target === 'left') fieldKey = 'leftPortraitUrl';
+          else if (target === 'right') fieldKey = 'rightPortraitUrl';
+          else if (target === 'dress') fieldKey = 'dressCodeImageUrl';
+          else if (target === 'map') fieldKey = 'mapImageUrl';
+
+          const docRef = doc(db, 'site_content', 'main');
+          await setDoc(docRef, { [fieldKey]: downloadUrl }, { merge: true });
+
           if (target === 'hero') {
             setCmsImageUrl(downloadUrl);
+            setHeroImageUrl(downloadUrl);
           } else if (target === 'left') {
             setCmsLeftPortraitUrl(downloadUrl);
+            setLeftPortraitUrl(downloadUrl);
           } else if (target === 'right') {
             setCmsRightPortraitUrl(downloadUrl);
+            setRightPortraitUrl(downloadUrl);
+          } else if (target === 'dress') {
+            setCmsDressCodeImageUrl(downloadUrl);
+            setDressCodeImageUrl(downloadUrl);
+          } else if (target === 'map') {
+            setCmsMapImageUrl(downloadUrl);
+            setMapImageUrl(downloadUrl);
           }
           setIsUploading(false);
         } catch (err: any) {
@@ -495,6 +527,8 @@ export default function App() {
         imageUrl: cmsImageUrl,
         leftPortraitUrl: cmsLeftPortraitUrl,
         rightPortraitUrl: cmsRightPortraitUrl,
+        dressCodeImageUrl: cmsDressCodeImageUrl,
+        mapImageUrl: cmsMapImageUrl,
         paletteColors: cmsPaletteColors,
         updatedAt: new Date().toISOString(),
       });
@@ -504,6 +538,8 @@ export default function App() {
       setHeroImageUrl(cmsImageUrl);
       setLeftPortraitUrl(cmsLeftPortraitUrl);
       setRightPortraitUrl(cmsRightPortraitUrl);
+      setDressCodeImageUrl(cmsDressCodeImageUrl);
+      setMapImageUrl(cmsMapImageUrl);
       setPaletteColors(cmsPaletteColors);
 
       setSaveStatus('saved');
@@ -1035,7 +1071,7 @@ export default function App() {
             </header>
 
             {/* Sub-navigation Tab Selector */}
-            <div className="flex border-b border-earth-dark/10 mb-8 gap-6">
+            <div className="flex border-b border-earth-dark/10 mb-8 gap-6 overflow-x-auto whitespace-nowrap">
               <button
                 type="button"
                 onClick={() => setAdminTab('rsvps')}
@@ -1058,6 +1094,17 @@ export default function App() {
               >
                 Website Content (CMS)
               </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('images')}
+                className={`pb-3 text-xs tracking-[0.2em] font-sans font-bold uppercase cursor-pointer border-b-2 transition-all duration-300 ${
+                  adminTab === 'images'
+                    ? 'border-olive-drab text-[#5E5B52]'
+                    : 'border-transparent text-[#6E6A5F]/60 hover:text-earth-dark font-medium'
+                }`}
+              >
+                🖼️ Global Image Assets Registry
+              </button>
             </div>
 
             {/* Error alerts if firebase collection can't load */}
@@ -1068,7 +1115,7 @@ export default function App() {
               </div>
             )}
 
-            {adminTab === 'rsvps' ? (
+            {adminTab === 'rsvps' && (
               <>
                 {/* Summary KPI Grid */}
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -1312,100 +1359,12 @@ export default function App() {
               </div>
             </div>
           </>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
-            {/* Left Column: Image Asset Swap / Firebase Storage Section */}
-            <div className="lg:col-span-4 flex flex-col gap-6">
-              <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 shadow-xs text-left flex flex-col gap-6">
-                <div>
-                  <h2 className="font-serif text-lg font-light text-earth-dark mb-1 pb-1 border-b border-earth-dark/5 select-text">
-                    I. Image Assets Registry
-                  </h2>
-                  <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed select-text">
-                    Manage the main visual backdrop assets for both your Hero screen cover and supporting date section portraits.
-                  </p>
-                </div>
+        )}
 
-                {/* Upload Node 1: Hero Fullscreen Background */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/30 backdrop-blur-xs">
-                  <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                    Hero Fullscreen Background
-                  </span>
-                  <div className="relative rounded-lg overflow-hidden aspect-[16/9] mb-3 bg-stone-100">
-                    <img src={cmsImageUrl} alt="Hero Fullscreen" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                  <div className="flex gap-2">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'hero');
-                      }}
-                      className="text-xs font-sans w-full"
-                    />
-                  </div>
-                </div>
-
-                {/* Upload Node 2: Left Side Portrait Image */}
-                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/30 backdrop-blur-xs">
-                  <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                    Left Side Portrait (Tokyo Tower)
-                  </span>
-                  <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px]">
-                    <img src={cmsLeftPortraitUrl} alt="Left Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                  <div className="flex gap-2">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'left');
-                      }}
-                      className="text-xs font-sans w-full"
-                    />
-                  </div>
-                </div>
-
-                {/* Upload Node 3: Right Side Portrait Image */}
-                <div className="border border-[#DECCA6]/30 p-4 rounded-xl relative bg-white/30 backdrop-blur-xs">
-                  <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
-                    Right Side Portrait (Nighttime)
-                  </span>
-                  <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px]">
-                    <img src={cmsRightPortraitUrl} alt="Right Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                  <div className="flex gap-2">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) startUpload(file, 'right');
-                      }}
-                      className="text-xs font-sans w-full"
-                    />
-                  </div>
-                </div>
-
-                {/* Active Global Progress Indicator */}
-                {isUploading && (
-                  <div className="p-3 bg-stone-100 rounded-xl border border-earth-dark/15">
-                    <div className="flex justify-between items-center text-[10px] font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
-                      <span>Uploading to {activeUploadTarget === 'hero' ? 'Hero Background' : activeUploadTarget === 'left' ? 'Left Side Portrait' : 'Right Side Portrait'}...</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full bg-stone-200 h-1 rounded-full overflow-hidden">
-                      <div className="bg-olive-drab h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column: Web Content Modification Form */}
-            <div className="lg:col-span-8">
+        {adminTab === 'cms' && (
+          <div className="grid grid-cols-1 gap-8 mt-4">
+            {/* Full Width Column: Web Content Modification Form */}
+            <div className="w-full">
               <form onSubmit={handleSaveCmsContent} className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col gap-6 text-left">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-earth-dark/5 pb-4">
                   <div>
@@ -1702,6 +1661,222 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {adminTab === 'images' && (
+          <div className="flex flex-col gap-8 mt-4">
+            <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs text-left">
+              <div className="border-b border-earth-dark/5 pb-4 mb-6">
+                <h2 className="font-serif text-2xl font-light text-earth-dark flex items-center gap-2 select-text">
+                  <span>🖼️ Global Image Assets Registry</span>
+                </h2>
+                <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
+                  All image inputs utilize direct Cloud integration. Uploading instantly stores artifacts securely in Firebase Storage, generates a permanent signature link, and overwrites the active site property inside document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-olive-drab">site_content/main</code>. Live previews will render immediately.
+                </p>
+              </div>
+
+              {/* Active Global Progress Indicator inside the workspace */}
+              {isUploading && (
+                <div className="p-4 mb-6 bg-olive-light/10 rounded-xl border border-olive-light/25 animate-pulse">
+                  <div className="flex justify-between items-center text-xs font-sans font-bold text-earth-accent mb-1 uppercase tracking-wider">
+                    <span>
+                      Uploading to{' '}
+                      {activeUploadTarget === 'hero' ? 'Hero Fullscreen Background Photo' : 
+                       activeUploadTarget === 'right' ? 'Top-Right Staggered Portrait' : 
+                       activeUploadTarget === 'left' ? 'Bottom-Left Staggered Portrait' : 
+                       activeUploadTarget === 'dress' ? 'Dress Code Palette Visuals' : 
+                       'Venue Map Illustration Graphic'}...
+                    </span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-stone-200/60 h-2 rounded-full overflow-hidden">
+                    <div className="bg-olive-drab h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Card 1: Hero Cover Photo */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 1: Hero Fullscreen Background Photo
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      The prominent welcome photo supporting clean text styling at the bottom edge of the folding fold.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[16/9] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
+                      <img src={cmsImageUrl} alt="Hero Fullscreen" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'hero');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 2: Top-Right Staggered Portrait */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 2: Top-Right Staggered Portrait
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
+                      <img src={cmsRightPortraitUrl} alt="Top-Right Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'right');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 3: Bottom-Left Staggered Portrait */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 3: Bottom-Left Staggered Portrait
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/5] mb-3 bg-stone-100 max-h-[160px] hover:shadow-inner transition-shadow">
+                      <img src={cmsLeftPortraitUrl} alt="Bottom-Left Portrait" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'left');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 4: Dress Code Palette Visuals */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 4: Dress Code Color Palette Visuals / Images
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow">
+                      <img src={cmsDressCodeImageUrl} alt="Dress Code Inspiration" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) startUpload(file, 'dress');
+                      }}
+                      className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Card 5: Venue Map Illustration */}
+                <div className="border border-earth-dark/10 p-4 rounded-xl relative bg-white/20 select-text flex flex-col justify-between">
+                  <div>
+                    <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
+                      Part 5: Venue Map Illustration Graphic
+                    </span>
+                    <p className="font-sans text-[11px] text-[#6E6A5F] mb-3 leading-relaxed">
+                      Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="relative rounded-lg overflow-hidden aspect-[4/3] mb-3 bg-stone-100 hover:shadow-inner transition-shadow flex items-center justify-center">
+                      {cmsMapImageUrl ? (
+                        <img src={cmsMapImageUrl} alt="Venue Map Override" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="text-center p-4">
+                          <span className="block text-xs text-neutral-400 font-serif italic mb-1">No custom illustration</span>
+                          <span className="text-[9px] tracking-wider uppercase font-sans text-olive-drab font-semibold bg-olive-light/10 px-2 py-0.5 rounded">Active: Fallback SVG Map</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) startUpload(file, 'map');
+                        }}
+                        className="text-xs font-sans w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-olive-light/25 file:text-earth-dark hover:file:bg-olive-light/40 cursor-pointer"
+                      />
+                      {cmsMapImageUrl && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm("Are you sure you want to revert to the custom interactive SVG map?")) {
+                              setCmsMapImageUrl('');
+                              setMapImageUrl('');
+                              const docRef = doc(db, 'site_content', 'main');
+                              await setDoc(docRef, { mapImageUrl: '' }, { merge: true });
+                            }
+                          }}
+                          className="text-[9px] font-sans font-bold tracking-widest text-red-700 hover:text-red-900 border border-red-200 bg-red-50 py-1 px-2 rounded hover:bg-red-100 uppercase transition-all duration-200"
+                        >
+                          ✕ Clear Custom & Restore Local SVG
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Future Architectural Guardrail box */}
+              <div className="mt-10 border border-[#DECCA6]/30 p-6 rounded-2xl bg-[#FAF8F5]/90 relative overflow-hidden select-text">
+                <div className="absolute top-0 right-0 p-3 text-[10px] font-mono tracking-widest text-[#B5A57F] bg-[#FAF8F5] select-none border-l border-b border-[#DECCA6]/20">
+                  SEC_ARCH_GUARDRAIL
+                </div>
+                <h3 className="font-serif text-lg font-light text-earth-dark mb-2 flex items-center gap-2">
+                  <span>🔒 Architectural Auto-Registration Guardrail & Protocol</span>
+                </h3>
+                <p className="font-sans text-xs text-[#6E6A5F] leading-relaxed mb-4">
+                  To ensure absolute editability and future-proof design extensibility, any new visual section, functional module, or image asset introduced to this wedding codebase must strictly adhere to the following framework convention:
+                </p>
+                <ul className="space-y-2 text-xs text-[#6E6A5F] font-sans list-disc list-inside">
+                  <li>
+                    <strong className="text-earth-dark font-semibold">Step 1 (Schema Mapping):</strong> Append a default URL property directly into the state list and the initial translations dictionary as local fallbacks.
+                  </li>
+                  <li>
+                    <strong className="text-earth-dark font-semibold">Step 2 (CMS Exposure):</strong> Register a matching file input or uploader target within the <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">startUpload</code> dispatcher, matching one-to-one with its Firestore key identifier.
+                  </li>
+                  <li>
+                    <strong className="text-earth-dark font-semibold">Step 3 (Automated Sync):</strong> The image upload lifecycle automatically routes file payloads to Firebase cloud storage, returns secure access streams, and updates the Firestore <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">site_content/main</code> document, immediately refreshing live previews gracefully without administrative effort.
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         )}
