@@ -28,9 +28,12 @@ import {
   Upload,
   Image
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, storage, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
+// @ts-ignore
+import defaultHeroImage from './assets/images/regenerated_image_1780219137505.jpg';
 
 // Define target wedding date: Saturday, Oct 10, 2026 at 4:00 PM
 const WEDDING_DATE = new Date('2026-10-10T16:00:00').getTime();
@@ -310,7 +313,7 @@ export default function App() {
   };
 
   const [siteContent, setSiteContent] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
-  const [heroImageUrl, setHeroImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [heroImageUrl, setHeroImageUrl] = useState<string>(defaultHeroImage);
   const [leftPortraitUrl, setLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
   const [rightPortraitUrl, setRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
   const [dressCodeImageUrl, setDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
@@ -329,7 +332,7 @@ export default function App() {
   const [cmsLang, setCmsLang] = useState<'ENG' | 'VIE'>('ENG');
   const [cmsSection, setCmsSection] = useState<'hero' | 'details' | 'map' | 'story' | 'rsvp' | 'thankyou' | 'utils' | 'dresscode'>('hero');
   const [cmsTranslations, setCmsTranslations] = useState<Record<'ENG' | 'VIE', Translations>>(translations);
-  const [cmsImageUrl, setCmsImageUrl] = useState<string>('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+  const [cmsImageUrl, setCmsImageUrl] = useState<string>(defaultHeroImage);
   const [cmsLeftPortraitUrl, setCmsLeftPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
   const [cmsRightPortraitUrl, setCmsRightPortraitUrl] = useState<string>('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
   const [cmsDressCodeImageUrl, setCmsDressCodeImageUrl] = useState<string>('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
@@ -435,8 +438,8 @@ export default function App() {
             setHeroImageUrl(heroImg);
             setCmsImageUrl(heroImg);
           } else {
-            setHeroImageUrl('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
-            setCmsImageUrl('https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200');
+            setHeroImageUrl(defaultHeroImage);
+            setCmsImageUrl(defaultHeroImage);
           }
 
           const leftImg = data.leftPortraitUrl || data.dateLeftPhoto;
@@ -624,8 +627,8 @@ export default function App() {
         alert('Only image files (.jpg, .png, etc.) are permitted.');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed is 5MB.');
+      if (file.size > 15 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed is 15MB.');
         return;
       }
       startUpload(file);
@@ -639,8 +642,8 @@ export default function App() {
         alert('Only image files (.jpg, .png, etc.) are permitted.');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed is 5MB.');
+      if (file.size > 15 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed is 15MB.');
         return;
       }
       startUpload(file);
@@ -652,86 +655,85 @@ export default function App() {
     setActiveUploadTarget(target);
     setUploadProgress(0);
 
-    const reader = new FileReader();
+    let fieldKey = 'imageUrl';
+    let customKey = 'heroBg';
+    if (target === 'left') {
+      fieldKey = 'leftPortraitUrl';
+      customKey = 'dateLeftPhoto';
+    } else if (target === 'right') {
+      fieldKey = 'rightPortraitUrl';
+      customKey = 'dateRightPhoto';
+    } else if (target === 'dress') {
+      fieldKey = 'dressCodeImageUrl';
+      customKey = 'dressCodeStyleGraphic';
+    } else if (target === 'map') {
+      fieldKey = 'mapImageUrl';
+      customKey = 'venueMapSketchGraphic';
+    }
 
-    reader.onloadstart = () => {
-      setUploadProgress(15);
-    };
+    // Create a high-quality unique path inside Firebase Storage
+    const storageRef = ref(storage, `site_images/${target}_${Date.now()}_${file.name}`);
 
-    reader.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 50);
-        setUploadProgress(15 + percent);
-      }
-    };
+    // Begin upload task
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-    reader.onload = async () => {
-      try {
-        setUploadProgress(70);
-        const base64String = reader.result as string;
+    // Track state change of upload task
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 90);
+        setUploadProgress(percent);
+      },
+      (error) => {
+        console.error('Firebase Storage upload error:', error);
+        alert(`Storage upload failed: ${error.message || error}`);
+        setIsUploading(false);
+        setUploadProgress(0);
+      },
+      async () => {
+        try {
+          setUploadProgress(95);
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-        let fieldKey = 'imageUrl';
-        let customKey = 'heroBg';
-        if (target === 'left') {
-          fieldKey = 'leftPortraitUrl';
-          customKey = 'dateLeftPhoto';
-        } else if (target === 'right') {
-          fieldKey = 'rightPortraitUrl';
-          customKey = 'dateRightPhoto';
-        } else if (target === 'dress') {
-          fieldKey = 'dressCodeImageUrl';
-          customKey = 'dressCodeStyleGraphic';
-        } else if (target === 'map') {
-          fieldKey = 'mapImageUrl';
-          customKey = 'venueMapSketchGraphic';
-        }
+          // Update Firestore immediately to keep database record in sync
+          const docRef = doc(db, 'site_content', 'main');
+          await setDoc(docRef, { 
+            [fieldKey]: downloadURL,
+            [customKey]: downloadURL 
+          }, { merge: true });
 
-        setUploadProgress(85);
+          // Refresh state variables instantly so the page redraws in real time
+          if (target === 'hero') {
+            setCmsImageUrl(downloadURL);
+            setHeroImageUrl(downloadURL);
+          } else if (target === 'left') {
+            setCmsLeftPortraitUrl(downloadURL);
+            setLeftPortraitUrl(downloadURL);
+          } else if (target === 'right') {
+            setCmsRightPortraitUrl(downloadURL);
+            setRightPortraitUrl(downloadURL);
+          } else if (target === 'dress') {
+            setCmsDressCodeImageUrl(downloadURL);
+            setDressCodeImageUrl(downloadURL);
+          } else if (target === 'map') {
+            setCmsMapImageUrl(downloadURL);
+            setMapImageUrl(downloadURL);
+          }
 
-        // Overwrite immediately in Firestore with merge support
-        const docRef = doc(db, 'site_content', 'main');
-        await setDoc(docRef, { 
-          [fieldKey]: base64String,
-          [customKey]: base64String 
-        }, { merge: true });
+          setUploadProgress(100);
+          setTimeout(() => {
+            setIsUploading(false);
+            setUploadProgress(0);
+          }, 350);
 
-        if (target === 'hero') {
-          setCmsImageUrl(base64String);
-          setHeroImageUrl(base64String);
-        } else if (target === 'left') {
-          setCmsLeftPortraitUrl(base64String);
-          setLeftPortraitUrl(base64String);
-        } else if (target === 'right') {
-          setCmsRightPortraitUrl(base64String);
-          setRightPortraitUrl(base64String);
-        } else if (target === 'dress') {
-          setCmsDressCodeImageUrl(base64String);
-          setDressCodeImageUrl(base64String);
-        } else if (target === 'map') {
-          setCmsMapImageUrl(base64String);
-          setMapImageUrl(base64String);
-        }
-        
-        setUploadProgress(100);
-        setTimeout(() => {
+        } catch (err: any) {
+          console.error('Error writing to Firestore after image upload:', err);
+          alert(`Failed to save image reference to firestore: ${err.message || err}`);
           setIsUploading(false);
           setUploadProgress(0);
-        }, 300);
-
-      } catch (err: any) {
-        console.error('Error saving image text to Firestore:', err);
-        alert(`Error saving image: ${err.message || err}`);
-        setIsUploading(false);
+        }
       }
-    };
-
-    reader.onerror = (err) => {
-      console.error('File reader error:', err);
-      alert('Failed to read local file.');
-      setIsUploading(false);
-    };
-
-    reader.readAsDataURL(file);
+    );
   };
 
   const handleResetImage = async (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => {
@@ -1958,7 +1960,7 @@ export default function App() {
                   <span>🖼️ Global Image Assets Registry</span>
                 </h2>
                 <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
-                  All image management slots here support direct drag-and-drop file ingestion. When you drop an image (or tap to choose a local file), the file is read instantly via JavaScript's <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-olive-drab">FileReader</code> and stored as a Base64 data URL string directly inside the corresponding field inside Firestore document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-neutral-800">site_content/main</code>. This removes all external cloud storage dependencies. Live previews will render immediately.
+                  All image management slots here support direct drag-and-drop file ingestion. When you drop an image (or tap to choose a local file), the file is uploaded to <strong className="text-earth-dark font-medium">Firebase Storage</strong> with a live upload progress indicator, and only the reference URL is saved inside Firestore document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-neutral-800">site_content/main</code>. This allows for high-quality, uncompressed photo files (up to 15MB+) to load instantly.
                 </p>
               </div>
 
@@ -1968,7 +1970,7 @@ export default function App() {
                   title="Hero Banner Background Image"
                   description="The prominent fullscreen welcome photo supporting clean text styling at the bottom edge of the folding fold."
                   currentValue={cmsImageUrl}
-                  fallbackValue="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200"
+                  fallbackValue={defaultHeroImage}
                   targetKey="hero"
                   isUploading={isUploading}
                   uploadProgress={uploadProgress}

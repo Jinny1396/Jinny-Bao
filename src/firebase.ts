@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -11,7 +11,10 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Initialize Firestore with specific Database ID (critical for compilation and multi-database capability)
-export const db = getFirestore(app, 'ai-studio-e7e5670b-569f-45ab-85a1-e55b971f2c28');
+// and configure experimentalForceLongPolling to prevent WebSocket connectivity failures in sandboxed previews.
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, 'ai-studio-e7e5670b-569f-45ab-85a1-e55b971f2c28');
 
 // Initialize Storage
 export const storage = getStorage(app);
@@ -77,7 +80,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
  */
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, 'site_content', 'main'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error("Please check your Firebase configuration. Client appears offline.");

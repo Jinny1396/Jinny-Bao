@@ -58,7 +58,9 @@ service cloud.firestore {
 
     // Dynamic layout site content collection rules
     match /site_content/{contentId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if contentId == 'main'
+        && (incoming().keys().hasAny(['imageUrl', 'heroBg', 'leftPortraitUrl', 'dateLeftPhoto', 'rightPortraitUrl', 'dateRightPhoto', 'dressCodeImageUrl', 'dressCodeStyleGraphic', 'mapImageUrl', 'venueMapSketchGraphic', 'paletteColors', 'ENG', 'VIE', 'updatedAt']));
     }
   }
 }
