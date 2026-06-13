@@ -32,6 +32,7 @@ import { db, storage, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
+import { compressImage, formatBytes } from './utils/compression';
 // @ts-ignore
 import defaultHeroImage from './assets/images/regenerated_image_1780219137505.jpg';
 
@@ -144,6 +145,13 @@ interface ImageDropZoneProps {
   activeUploadTarget: string;
   onFileSelect: (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map') => void;
   onReset: (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => void;
+  metadata?: {
+    originalSize: number;
+    compressedSize: number;
+    ratio: number;
+    timeTakenMs: number;
+    fileName: string;
+  };
 }
 
 const ImageDropZone: React.FC<ImageDropZoneProps> = ({
@@ -157,6 +165,7 @@ const ImageDropZone: React.FC<ImageDropZoneProps> = ({
   activeUploadTarget,
   onFileSelect,
   onReset,
+  metadata,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,8 +188,8 @@ const ImageDropZone: React.FC<ImageDropZoneProps> = ({
         alert('Only image files (.jpg, .png, .jpeg) are permitted.');
         return;
       }
-      if (file.size > 8 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed is 8MB.');
+      if (file.size > 50 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed for the original file is 50MB.');
         return;
       }
       onFileSelect(file, targetKey);
@@ -194,8 +203,8 @@ const ImageDropZone: React.FC<ImageDropZoneProps> = ({
         alert('Only image files (.jpg, .png, .jpeg) are permitted.');
         return;
       }
-      if (file.size > 8 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed is 8MB.');
+      if (file.size > 50 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed for the original file is 50MB.');
         return;
       }
       onFileSelect(file, targetKey);
@@ -241,10 +250,12 @@ const ImageDropZone: React.FC<ImageDropZoneProps> = ({
           className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-stone-100 border border-neutral-200/50 cursor-pointer shadow-sm transition-all duration-300 hover:shadow-md flex flex-col items-center justify-center min-h-[140px]"
         >
           {isCurrentTargetUploading ? (
-            <div className="absolute inset-x-0 inset-y-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center p-3 z-10">
+            <div className="absolute inset-x-0 inset-y-0 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center p-3 z-10">
               <RefreshCw className="w-6 h-6 text-olive-drab animate-spin mb-2" />
               <div className="text-xs font-sans font-bold text-earth-dark">{uploadProgress}%</div>
-              <div className="text-[10px] text-stone-500 uppercase tracking-widest mt-1">Encoding Base64...</div>
+              <div className="text-[9px] text-stone-500 uppercase tracking-wider mt-1 text-center font-medium">
+                {uploadProgress < 35 ? 'Reading Image...' : uploadProgress < 75 ? 'Worker Compressing...' : 'Saving to Database...'}
+              </div>
             </div>
           ) : null}
 
@@ -271,6 +282,36 @@ const ImageDropZone: React.FC<ImageDropZoneProps> = ({
             </div>
           )}
         </div>
+
+        {/* Browser-Side Compression Outcome stats info board */}
+        {metadata && imageToShow && (
+          <div className="bg-[#FAF8F5]/80 border border-earth-dark/5 p-2 rounded-xl text-[10px] font-mono text-[#6E6A5F] space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-stone-400 font-sans text-[9px] uppercase tracking-wider">File Name</span>
+              <span className="truncate max-w-[140px] text-right font-medium text-earth-dark select-text" title={metadata.fileName}>
+                {metadata.fileName || 'Uploaded Asset'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center border-t border-earth-dark/5 pt-1 mt-1">
+              <span className="text-stone-400 font-sans text-[9px] uppercase tracking-wider">Footprint</span>
+              <span className="font-semibold text-earth-dark">
+                {formatBytes(metadata.originalSize)} <span className="text-stone-300 mx-0.5 font-normal">→</span> <span className="text-olive-drab">{formatBytes(metadata.compressedSize)}</span>
+              </span>
+            </div>
+            <div className="flex justify-between items-center border-t border-earth-dark/5 pt-1 mt-1">
+              <span className="text-stone-400 font-sans text-[9px] uppercase tracking-wider">Compression</span>
+              <span className="text-[9.5px] text-olive-drab font-bold bg-olive-light/30 px-1 py-0.5 rounded leading-none">
+                Saved {metadata.ratio}%
+              </span>
+            </div>
+            {metadata.timeTakenMs > 0 && (
+              <div className="flex justify-between items-center text-[9px] text-[#A39E93] border-t border-earth-dark/5 pt-1 mt-1 font-sans">
+                <span>Speed</span>
+                <span className="font-mono">processed in {metadata.timeTakenMs}ms</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex gap-2 w-full mt-1">
@@ -345,13 +386,24 @@ export default function App() {
     '#3D3B36'
   ]);
 
-  const [isUploading, setIsUploading] = useState<boolean>(false);
+   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right' | 'dress' | 'map'>('hero');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErrorMessage, setSaveErrorMessage] = useState<string>('');
   const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  // States for automatic image compression
+  const [compressionTargetSize, setCompressionTargetSize] = useState<number>(0.3); // Target size in MB (default 300KB to fit easily in Firestore docs)
+  const [compressionMaxResolution, setCompressionMaxResolution] = useState<number>(1280); // Maximum width/height boundary (default 1280px)
+  const [imagesMetadata, setImagesMetadata] = useState<Record<string, {
+    originalSize: number;
+    compressedSize: number;
+    ratio: number;
+    timeTakenMs: number;
+    fileName: string;
+  }>>({});
 
   const t = siteContent[lang];
 
@@ -484,6 +536,10 @@ export default function App() {
             const finalColors = loadedColors.slice(0, 5);
             setPaletteColors(finalColors);
             setCmsPaletteColors(finalColors);
+          }
+
+          if (data.imagesMetadata) {
+            setImagesMetadata(data.imagesMetadata);
           }
         }
       } catch (err) {
@@ -627,8 +683,8 @@ export default function App() {
         alert('Only image files (.jpg, .png, etc.) are permitted.');
         return;
       }
-      if (file.size > 15 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed is 15MB.');
+      if (file.size > 50 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed of pre-compressed file is 50MB.');
         return;
       }
       startUpload(file);
@@ -642,18 +698,18 @@ export default function App() {
         alert('Only image files (.jpg, .png, etc.) are permitted.');
         return;
       }
-      if (file.size > 15 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed is 15MB.');
+      if (file.size > 50 * 1024 * 1024) {
+        alert('File is too large. Maximum size allowed of pre-compressed file is 50MB.');
         return;
       }
       startUpload(file);
     }
   };
 
-  const startUpload = (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map' = 'hero') => {
+  const startUpload = async (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map' = 'hero') => {
     setIsUploading(true);
     setActiveUploadTarget(target);
-    setUploadProgress(0);
+    setUploadProgress(10); // Start progress bar visual
 
     let fieldKey = 'imageUrl';
     let customKey = 'heroBg';
@@ -671,69 +727,81 @@ export default function App() {
       customKey = 'venueMapSketchGraphic';
     }
 
-    // Create a high-quality unique path inside Firebase Storage
-    const storageRef = ref(storage, `site_images/${target}_${Date.now()}_${file.name}`);
+    try {
+      setUploadProgress(35); // compression stage
+      
+      // Perform browser-side high-quality compression
+      const res = await compressImage(file, compressionTargetSize, compressionMaxResolution);
+      
+      setUploadProgress(75); // storage stage
+      const { base64String, meta } = res;
 
-    // Begin upload task
-    const uploadTask = uploadBytesResumable(storageRef, file);
+      // Firestore strict document limit protection check
+      if (meta.compressedSize > 850 * 1024) {
+        alert(`Caution: Storing this compressed photo (${formatBytes(meta.compressedSize)}) comes close to the strict 1MB Firestore single-document capacity limit. If you have multiple custom slots enabled, please drop the "Target Max Size" setting down to 200KB-300KB to prevent save errors.`);
+      }
 
-    // Track state change of upload task
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 90);
-        setUploadProgress(percent);
-      },
-      (error) => {
-        console.error('Firebase Storage upload error:', error);
-        alert(`Storage upload failed: ${error.message || error}`);
+      const metaObj = {
+        originalSize: meta.originalSize,
+        compressedSize: meta.compressedSize,
+        ratio: meta.ratio,
+        timeTakenMs: meta.timeTakenMs,
+        fileName: file.name
+      };
+
+      const docRef = doc(db, 'site_content', 'main');
+      
+      // Safely fetch latest stored metadata so we only update this target's slots
+      const currentDocSnap = await getDoc(docRef);
+      let existingMetadata = {};
+      if (currentDocSnap.exists()) {
+        existingMetadata = currentDocSnap.data().imagesMetadata || {};
+      }
+
+      const updatedMetadata = {
+        ...existingMetadata,
+        [target]: metaObj
+      };
+
+      // Atomic merge into Firestore main document
+      await setDoc(docRef, { 
+        [fieldKey]: base64String,
+        [customKey]: base64String,
+        imagesMetadata: updatedMetadata
+      }, { merge: true });
+
+      // Instantly refresh states to draw on browser in real time
+      setImagesMetadata(updatedMetadata);
+
+      if (target === 'hero') {
+        setCmsImageUrl(base64String);
+        setHeroImageUrl(base64String);
+      } else if (target === 'left') {
+        setCmsLeftPortraitUrl(base64String);
+        setLeftPortraitUrl(base64String);
+      } else if (target === 'right') {
+        setCmsRightPortraitUrl(base64String);
+        setRightPortraitUrl(base64String);
+      } else if (target === 'dress') {
+        setCmsDressCodeImageUrl(base64String);
+        setDressCodeImageUrl(base64String);
+      } else if (target === 'map') {
+        setCmsMapImageUrl(base64String);
+        setMapImageUrl(base64String);
+      }
+
+      setUploadProgress(100);
+      setTimeout(() => {
         setIsUploading(false);
         setUploadProgress(0);
-      },
-      async () => {
-        try {
-          setUploadProgress(95);
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      }, 350);
 
-          // Update Firestore immediately to keep database record in sync
-          const docRef = doc(db, 'site_content', 'main');
-          await setDoc(docRef, { 
-            [fieldKey]: downloadURL,
-            [customKey]: downloadURL 
-          }, { merge: true });
-
-          // Refresh state variables instantly so the page redraws in real time
-          if (target === 'hero') {
-            setCmsImageUrl(downloadURL);
-            setHeroImageUrl(downloadURL);
-          } else if (target === 'left') {
-            setCmsLeftPortraitUrl(downloadURL);
-            setLeftPortraitUrl(downloadURL);
-          } else if (target === 'right') {
-            setCmsRightPortraitUrl(downloadURL);
-            setRightPortraitUrl(downloadURL);
-          } else if (target === 'dress') {
-            setCmsDressCodeImageUrl(downloadURL);
-            setDressCodeImageUrl(downloadURL);
-          } else if (target === 'map') {
-            setCmsMapImageUrl(downloadURL);
-            setMapImageUrl(downloadURL);
-          }
-
-          setUploadProgress(100);
-          setTimeout(() => {
-            setIsUploading(false);
-            setUploadProgress(0);
-          }, 350);
-
-        } catch (err: any) {
-          console.error('Error writing to Firestore after image upload:', err);
-          alert(`Failed to save image reference to firestore: ${err.message || err}`);
-          setIsUploading(false);
-          setUploadProgress(0);
-        }
-      }
-    );
+    } catch (err: any) {
+      console.error('Browser image compression / database save error:', err);
+      alert(`Image processing failed: ${err.message || err}`);
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   const handleResetImage = async (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => {
@@ -1960,8 +2028,82 @@ export default function App() {
                   <span>🖼️ Global Image Assets Registry</span>
                 </h2>
                 <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
-                  All image management slots here support direct drag-and-drop file ingestion. When you drop an image (or tap to choose a local file), the file is uploaded to <strong className="text-earth-dark font-medium">Firebase Storage</strong> with a live upload progress indicator, and only the reference URL is saved inside Firestore document <code className="font-mono text-[11px] bg-stone-100 px-1 py-0.5 rounded text-neutral-800">site_content/main</code>. This allows for high-quality, uncompressed photo files (up to 15MB+) to load instantly.
+                  All image management slots here support direct drag-and-drop file ingestion. When you drop an image (or tap to choose a local file), the file is dynamically compressed inside your browser down to your target footprint, and stored as an efficient Base64 data string directly inside Firestore. This handles raw, massive camera uploads (up to <strong className="text-earth-dark font-medium">50MB+</strong>) instantly, completely self-contained within your browser without using external servers or media storage providers.
                 </p>
+              </div>
+
+              {/* Sleek Browser-Side Compression Controls */}
+              <div className="bg-white border border-earth-dark/5 p-4 sm:p-5 rounded-2xl mb-8 space-y-4">
+                <div className="flex flex-col gap-1 select-text">
+                  <h3 className="font-serif text-sm font-medium text-earth-dark flex items-center gap-1.5">
+                    <span>⚙️ Client-Side Compression Tuning Controls</span>
+                  </h3>
+                  <p className="font-sans text-[11px] text-[#A39E93]">
+                    Because images are fully self-contained in our secure database (Firestore limits any single document to 1MB total), we compress files on-the-fly. Balance your quality and size below:
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Target File Size Slider */}
+                  <div className="space-y-1.5 select-text">
+                    <div className="flex justify-between items-center text-xs font-sans">
+                      <span className="font-medium text-earth-dark">Target Maximum Size:</span>
+                      <span className="font-mono text-olive-drab font-bold">
+                        {compressionTargetSize === 0.3 ? '300 KB (Recommended)' : `${Math.round(compressionTargetSize * 1000)} KB`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.5"
+                      step="0.1"
+                      value={compressionTargetSize}
+                      onChange={(e) => setCompressionTargetSize(parseFloat(e.target.value))}
+                      className="w-full accent-olive-drab h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[9px] text-[#A39E93] font-mono">
+                      <span>100KB (Fastest Page Load)</span>
+                      <span>1500KB (Maximum Clarity Limit)</span>
+                    </div>
+                  </div>
+
+                  {/* Target Resolution boundary */}
+                  <div className="space-y-1.5 select-text">
+                    <div className="flex justify-between items-center text-xs font-sans">
+                      <span className="font-medium text-earth-dark">Target Resolution Limit:</span>
+                      <span className="font-mono text-olive-drab font-bold">{compressionMaxResolution}px</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[800, 1024, 1280, 1600].map((res) => (
+                        <button
+                          key={res}
+                          type="button"
+                          onClick={() => setCompressionMaxResolution(res)}
+                          className={`text-[10px] font-sans font-bold py-1.5 px-1 rounded transition-all duration-200 ${
+                            compressionMaxResolution === res
+                              ? 'bg-olive-drab text-white shadow-xs'
+                              : 'bg-[#FAF8F5] border border-stone-200 text-[#6E6A5F] hover:bg-stone-50'
+                          }`}
+                        >
+                          {res === 1280 ? '1280 (Std)' : `${res}px`}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-[9px] text-[#A39E93] text-right">
+                      {compressionMaxResolution <= 1024 ? 'Subtle details may be softer' : 'Brilliant clarity on high-density displays'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Warning Alert if settings exceed safety boundaries */}
+                {(compressionTargetSize > 0.4 || compressionMaxResolution > 1280) && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[11px] text-amber-800 flex items-start gap-2 select-text">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="font-sans leading-relaxed">
+                      <strong>Safety Guard Warning:</strong> Storing images near <strong>{Math.round(compressionTargetSize * 1000)} KB</strong> is fully active, but since the 1MB Firestore limit is shared by all 5 image slots, configuring multiple custom images at this size will cause save failures. Keep targets around 150KB - 300KB to populate all wedding assets safely!
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1977,6 +2119,7 @@ export default function App() {
                   activeUploadTarget={activeUploadTarget}
                   onFileSelect={startUpload}
                   onReset={handleResetImage}
+                  metadata={imagesMetadata.hero}
                 />
 
                 {/* Slot 2: The Date Section - Left Floating Portrait */}
@@ -1991,6 +2134,7 @@ export default function App() {
                   activeUploadTarget={activeUploadTarget}
                   onFileSelect={startUpload}
                   onReset={handleResetImage}
+                  metadata={imagesMetadata.left}
                 />
 
                 {/* Slot 3: The Date Section - Right Floating Portrait */}
@@ -2005,6 +2149,7 @@ export default function App() {
                   activeUploadTarget={activeUploadTarget}
                   onFileSelect={startUpload}
                   onReset={handleResetImage}
+                  metadata={imagesMetadata.right}
                 />
 
                 {/* Slot 4: Dress Code Style Graphic */}
@@ -2019,6 +2164,7 @@ export default function App() {
                   activeUploadTarget={activeUploadTarget}
                   onFileSelect={startUpload}
                   onReset={handleResetImage}
+                  metadata={imagesMetadata.dress}
                 />
 
                 {/* Slot 5: Venue Map Sketch Graphic */}
@@ -2033,6 +2179,7 @@ export default function App() {
                   activeUploadTarget={activeUploadTarget}
                   onFileSelect={startUpload}
                   onReset={handleResetImage}
+                  metadata={imagesMetadata.map}
                 />
               </div>
 

@@ -60,7 +60,7 @@ service cloud.firestore {
     match /site_content/{contentId} {
       allow read: if true;
       allow write: if contentId == 'main'
-        && (incoming().keys().hasAny(['imageUrl', 'heroBg', 'leftPortraitUrl', 'dateLeftPhoto', 'rightPortraitUrl', 'dateRightPhoto', 'dressCodeImageUrl', 'dressCodeStyleGraphic', 'mapImageUrl', 'venueMapSketchGraphic', 'paletteColors', 'ENG', 'VIE', 'updatedAt']));
+        && (incoming().keys().hasAny(['imageUrl', 'heroBg', 'leftPortraitUrl', 'dateLeftPhoto', 'rightPortraitUrl', 'dateRightPhoto', 'dressCodeImageUrl', 'dressCodeStyleGraphic', 'mapImageUrl', 'venueMapSketchGraphic', 'paletteColors', 'ENG', 'VIE', 'updatedAt', 'imagesMetadata']));
     }
   }
 }
