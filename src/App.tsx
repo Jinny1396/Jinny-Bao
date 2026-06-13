@@ -28,11 +28,9 @@ import {
   Upload,
   Image
 } from 'lucide-react';
-import { db, storage, handleFirestoreError, OperationType } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, collection, getDocs, getDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { translations, type Translations } from './translations';
-import { compressImage, formatBytes } from './utils/compression';
 // @ts-ignore
 import defaultHeroImage from './assets/images/regenerated_image_1780219137505.jpg';
 
@@ -134,208 +132,99 @@ interface Petal {
   scale: number;
 }
 
-interface ImageDropZoneProps {
+interface ImageAssetFieldProps {
   title: string;
   description: string;
   currentValue: string;
   fallbackValue: string;
-  targetKey: 'hero' | 'left' | 'right' | 'dress' | 'map';
-  isUploading: boolean;
-  uploadProgress: number;
-  activeUploadTarget: string;
-  onFileSelect: (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map') => void;
-  onReset: (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => void;
-  metadata?: {
-    originalSize: number;
-    compressedSize: number;
-    ratio: number;
-    timeTakenMs: number;
-    fileName: string;
-  };
+  onChange: (val: string) => void;
+  recommendedPaths: string[];
 }
 
-const ImageDropZone: React.FC<ImageDropZoneProps> = ({
+const ImageAssetField: React.FC<ImageAssetFieldProps> = ({
   title,
   description,
   currentValue,
   fallbackValue,
-  targetKey,
-  isUploading,
-  uploadProgress,
-  activeUploadTarget,
-  onFileSelect,
-  onReset,
-  metadata,
+  onChange,
+  recommendedPaths,
 }) => {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Only image files (.jpg, .png, .jpeg) are permitted.');
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed for the original file is 50MB.');
-        return;
-      }
-      onFileSelect(file, targetKey);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Only image files (.jpg, .png, .jpeg) are permitted.');
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed for the original file is 50MB.');
-        return;
-      }
-      onFileSelect(file, targetKey);
-    }
-  };
-
-  const isCurrentTargetUploading = isUploading && activeUploadTarget === targetKey;
-  // If currentValue is empty string or default fallback URL is active
-  const imageToShow = currentValue || fallbackValue;
+  const activeImage = currentValue || fallbackValue;
 
   return (
-    <div 
-      className={`border-2 rounded-2xl p-4 transition-all duration-300 relative flex flex-col justify-between h-full bg-white/40 ${
-        isDragOver 
-          ? 'border-olive-drab bg-olive-light/10 shadow-md scale-[1.01]' 
-          : 'border-dashed border-earth-dark/20 hover:border-earth-dark/40 hover:bg-white/60'
-      }`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        accept="image/*" 
-        className="hidden" 
-      />
-      
-      <div className="select-text mb-4">
+    <div className="bg-white border border-earth-dark/5 p-4 sm:p-5 rounded-2xl flex flex-col gap-4 text-left shadow-xs transition-all duration-200 hover:border-earth-dark/10">
+      <div>
         <span className="font-sans text-[10px] font-bold tracking-wider text-earth-accent uppercase block mb-1">
           {title}
         </span>
-        <p className="font-sans text-[11px] text-[#6E6A5F] leading-relaxed">
+        <p className="font-sans text-[11px] text-[#A39E93] leading-relaxed select-text">
           {description}
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {/* Interactive Drop Area / Preview */}
-        <div 
-          onClick={() => fileInputRef.current?.click()}
-          className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-stone-100 border border-neutral-200/50 cursor-pointer shadow-sm transition-all duration-300 hover:shadow-md flex flex-col items-center justify-center min-h-[140px]"
-        >
-          {isCurrentTargetUploading ? (
-            <div className="absolute inset-x-0 inset-y-0 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center p-3 z-10">
-              <RefreshCw className="w-6 h-6 text-olive-drab animate-spin mb-2" />
-              <div className="text-xs font-sans font-bold text-earth-dark">{uploadProgress}%</div>
-              <div className="text-[9px] text-stone-500 uppercase tracking-wider mt-1 text-center font-medium">
-                {uploadProgress < 35 ? 'Reading Image...' : uploadProgress < 75 ? 'Worker Compressing...' : 'Saving to Database...'}
-              </div>
-            </div>
-          ) : null}
-
-          {imageToShow ? (
-            <>
-              <img 
-                src={imageToShow} 
-                alt={title} 
-                className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105" 
-                referrerPolicy="no-referrer" 
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-sm border border-earth-dark/10 flex items-center gap-1.5 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
-                  <Upload className="w-3.5 h-3.5 text-olive-drab" />
-                  <span className="text-[10px] font-bold tracking-wider uppercase font-sans text-earth-dark">Replace Image</span>
-                </div>
-              </div>
-            </>
+      <div className="flex gap-4 items-stretch sm:items-center flex-col sm:flex-row">
+        {/* Dynamic Image Preview Thumbnail */}
+        <div className="w-full sm:w-28 h-20 rounded-xl overflow-hidden bg-stone-100 border border-neutral-200/40 shrink-0 self-center">
+          {activeImage ? (
+            <img 
+              src={activeImage} 
+              alt={title} 
+              className="w-full h-full object-cover" 
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                // Return clean fallback if the custom user path is broken
+                (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600';
+              }}
+            />
           ) : (
-            <div className="flex flex-col items-center justify-center p-4 text-center">
-              <Image className="w-8 h-8 text-neutral-400 mb-2 stroke-[1.5]" />
-              <span className="text-[11px] text-stone-500 font-serif italic mb-1">No custom illustration</span>
-              <span className="text-[9px] tracking-wider uppercase font-sans text-olive-drab font-semibold bg-olive-light/10 px-2 py-0.5 rounded">Fallback Active</span>
+            <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center text-stone-400">
+              <span className="text-[10px] font-sans">No Image</span>
             </div>
           )}
         </div>
 
-        {/* Browser-Side Compression Outcome stats info board */}
-        {metadata && imageToShow && (
-          <div className="bg-[#FAF8F5]/80 border border-earth-dark/5 p-2 rounded-xl text-[10px] font-mono text-[#6E6A5F] space-y-1">
-            <div className="flex justify-between items-center">
-              <span className="text-stone-400 font-sans text-[9px] uppercase tracking-wider">File Name</span>
-              <span className="truncate max-w-[140px] text-right font-medium text-earth-dark select-text" title={metadata.fileName}>
-                {metadata.fileName || 'Uploaded Asset'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center border-t border-earth-dark/5 pt-1 mt-1">
-              <span className="text-stone-400 font-sans text-[9px] uppercase tracking-wider">Footprint</span>
-              <span className="font-semibold text-earth-dark">
-                {formatBytes(metadata.originalSize)} <span className="text-stone-300 mx-0.5 font-normal">→</span> <span className="text-olive-drab">{formatBytes(metadata.compressedSize)}</span>
-              </span>
-            </div>
-            <div className="flex justify-between items-center border-t border-earth-dark/5 pt-1 mt-1">
-              <span className="text-stone-400 font-sans text-[9px] uppercase tracking-wider">Compression</span>
-              <span className="text-[9.5px] text-olive-drab font-bold bg-olive-light/30 px-1 py-0.5 rounded leading-none">
-                Saved {metadata.ratio}%
-              </span>
-            </div>
-            {metadata.timeTakenMs > 0 && (
-              <div className="flex justify-between items-center text-[9px] text-[#A39E93] border-t border-earth-dark/5 pt-1 mt-1 font-sans">
-                <span>Speed</span>
-                <span className="font-mono">processed in {metadata.timeTakenMs}ms</span>
-              </div>
+        {/* Path configuration inputs and presets */}
+        <div className="flex-1 w-full space-y-2">
+          <div>
+            <input 
+              type="text"
+              value={currentValue}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={`e.g. ${recommendedPaths[0]}`}
+              className="w-full rounded-xl border border-stone-200 bg-[#FAF8F5] px-3.5 py-2 text-xs font-sans text-earth-dark focus:border-olive-drab focus:outline-none placeholder:text-stone-400 shadow-inner"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-[9px] uppercase tracking-wider font-sans text-stone-400 select-none mr-1">
+              Quick Suggestions:
+            </span>
+            {recommendedPaths.map((path) => (
+              <button
+                key={path}
+                type="button"
+                onClick={() => onChange(path)}
+                className={`text-[9.5px] font-sans px-2.5 py-1 rounded transition-all duration-150 cursor-pointer ${
+                  currentValue === path 
+                    ? 'bg-olive-drab text-white font-medium' 
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                {path.split('/').pop()}
+              </button>
+            ))}
+            
+            {currentValue && (
+              <button
+                type="button"
+                onClick={() => onChange('')}
+                className="text-[9.5px] font-sans px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors duration-150 ml-auto cursor-pointer"
+                title="Revert back to default fallback illustration"
+              >
+                Clear (Fallback)
+              </button>
             )}
           </div>
-        )}
-
-        {/* Action Controls */}
-        <div className="flex gap-2 w-full mt-1">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-1 text-[10px] font-sans font-bold tracking-widest bg-olive-drab text-white hover:bg-[#4E4D45] py-2 px-3 rounded-lg shadow-xs uppercase transition-all duration-200 hover:shadow-sm"
-          >
-            Choose File
-          </button>
-          
-          {currentValue && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReset(targetKey);
-              }}
-              className="text-[10px] font-sans font-bold tracking-widest border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 py-2 px-3 rounded-lg uppercase transition-all duration-200"
-              title="Reset to fallback local image"
-            >
-              Reset
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -386,24 +275,9 @@ export default function App() {
     '#3D3B36'
   ]);
 
-   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [activeUploadTarget, setActiveUploadTarget] = useState<'hero' | 'left' | 'right' | 'dress' | 'map'>('hero');
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErrorMessage, setSaveErrorMessage] = useState<string>('');
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-
-  // States for automatic image compression
-  const [compressionTargetSize, setCompressionTargetSize] = useState<number>(0.3); // Target size in MB (default 300KB to fit easily in Firestore docs)
-  const [compressionMaxResolution, setCompressionMaxResolution] = useState<number>(1280); // Maximum width/height boundary (default 1280px)
-  const [imagesMetadata, setImagesMetadata] = useState<Record<string, {
-    originalSize: number;
-    compressedSize: number;
-    ratio: number;
-    timeTakenMs: number;
-    fileName: string;
-  }>>({});
 
   const t = siteContent[lang];
 
@@ -485,50 +359,25 @@ export default function App() {
           setSiteContent(loadedContent);
           setCmsTranslations(loadedContent);
 
-          const heroImg = data.imageUrl || data.heroBg;
-          if (heroImg) {
-            setHeroImageUrl(heroImg);
-            setCmsImageUrl(heroImg);
-          } else {
-            setHeroImageUrl(defaultHeroImage);
-            setCmsImageUrl(defaultHeroImage);
-          }
+          const heroImg = data.imageUrl || data.heroBg || '';
+          setHeroImageUrl(heroImg || defaultHeroImage);
+          setCmsImageUrl(heroImg);
 
-          const leftImg = data.leftPortraitUrl || data.dateLeftPhoto;
-          if (leftImg) {
-            setLeftPortraitUrl(leftImg);
-            setCmsLeftPortraitUrl(leftImg);
-          } else {
-            setLeftPortraitUrl('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
-            setCmsLeftPortraitUrl('https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
-          }
+          const leftImg = data.leftPortraitUrl || data.dateLeftPhoto || '';
+          setLeftPortraitUrl(leftImg || 'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600');
+          setCmsLeftPortraitUrl(leftImg);
 
-          const rightImg = data.rightPortraitUrl || data.dateRightPhoto;
-          if (rightImg) {
-            setRightPortraitUrl(rightImg);
-            setCmsRightPortraitUrl(rightImg);
-          } else {
-            setRightPortraitUrl('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
-            setCmsRightPortraitUrl('https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
-          }
+          const rightImg = data.rightPortraitUrl || data.dateRightPhoto || '';
+          setRightPortraitUrl(rightImg || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600');
+          setCmsRightPortraitUrl(rightImg);
 
-          const dressImg = data.dressCodeImageUrl || data.dressCodeStyleGraphic;
-          if (dressImg) {
-            setDressCodeImageUrl(dressImg);
-            setCmsDressCodeImageUrl(dressImg);
-          } else {
-            setDressCodeImageUrl('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
-            setCmsDressCodeImageUrl('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
-          }
+          const dressImg = data.dressCodeImageUrl || data.dressCodeStyleGraphic || '';
+          setDressCodeImageUrl(dressImg || 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600');
+          setCmsDressCodeImageUrl(dressImg);
 
-          const mapImg = data.mapImageUrl || data.venueMapSketchGraphic;
-          if (mapImg) {
-            setMapImageUrl(mapImg);
-            setCmsMapImageUrl(mapImg);
-          } else {
-            setMapImageUrl('');
-            setCmsMapImageUrl('');
-          }
+          const mapImg = data.mapImageUrl || data.venueMapSketchGraphic || '';
+          setMapImageUrl(mapImg || '');
+          setCmsMapImageUrl(mapImg);
 
           if (data.paletteColors && Array.isArray(data.paletteColors)) {
             const loadedColors = [...data.paletteColors];
@@ -536,10 +385,6 @@ export default function App() {
             const finalColors = loadedColors.slice(0, 5);
             setPaletteColors(finalColors);
             setCmsPaletteColors(finalColors);
-          }
-
-          if (data.imagesMetadata) {
-            setImagesMetadata(data.imagesMetadata);
           }
         }
       } catch (err) {
@@ -664,204 +509,7 @@ export default function App() {
     }));
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Only image files (.jpg, .png, etc.) are permitted.');
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed of pre-compressed file is 50MB.');
-        return;
-      }
-      startUpload(file);
-    }
-  };
-
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Only image files (.jpg, .png, etc.) are permitted.');
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        alert('File is too large. Maximum size allowed of pre-compressed file is 50MB.');
-        return;
-      }
-      startUpload(file);
-    }
-  };
-
-  const startUpload = async (file: File, target: 'hero' | 'left' | 'right' | 'dress' | 'map' = 'hero') => {
-    setIsUploading(true);
-    setActiveUploadTarget(target);
-    setUploadProgress(10); // Start progress bar visual
-
-    let fieldKey = 'imageUrl';
-    let customKey = 'heroBg';
-    if (target === 'left') {
-      fieldKey = 'leftPortraitUrl';
-      customKey = 'dateLeftPhoto';
-    } else if (target === 'right') {
-      fieldKey = 'rightPortraitUrl';
-      customKey = 'dateRightPhoto';
-    } else if (target === 'dress') {
-      fieldKey = 'dressCodeImageUrl';
-      customKey = 'dressCodeStyleGraphic';
-    } else if (target === 'map') {
-      fieldKey = 'mapImageUrl';
-      customKey = 'venueMapSketchGraphic';
-    }
-
-    try {
-      setUploadProgress(35); // compression stage
-      
-      // Perform browser-side high-quality compression
-      const res = await compressImage(file, compressionTargetSize, compressionMaxResolution);
-      
-      setUploadProgress(75); // storage stage
-      const { base64String, meta } = res;
-
-      // Firestore strict document limit protection check
-      if (meta.compressedSize > 850 * 1024) {
-        alert(`Caution: Storing this compressed photo (${formatBytes(meta.compressedSize)}) comes close to the strict 1MB Firestore single-document capacity limit. If you have multiple custom slots enabled, please drop the "Target Max Size" setting down to 200KB-300KB to prevent save errors.`);
-      }
-
-      const metaObj = {
-        originalSize: meta.originalSize,
-        compressedSize: meta.compressedSize,
-        ratio: meta.ratio,
-        timeTakenMs: meta.timeTakenMs,
-        fileName: file.name
-      };
-
-      const docRef = doc(db, 'site_content', 'main');
-      
-      // Safely fetch latest stored metadata so we only update this target's slots
-      const currentDocSnap = await getDoc(docRef);
-      let existingMetadata = {};
-      if (currentDocSnap.exists()) {
-        existingMetadata = currentDocSnap.data().imagesMetadata || {};
-      }
-
-      const updatedMetadata = {
-        ...existingMetadata,
-        [target]: metaObj
-      };
-
-      // Atomic merge into Firestore main document
-      await setDoc(docRef, { 
-        [fieldKey]: base64String,
-        [customKey]: base64String,
-        imagesMetadata: updatedMetadata
-      }, { merge: true });
-
-      // Instantly refresh states to draw on browser in real time
-      setImagesMetadata(updatedMetadata);
-
-      if (target === 'hero') {
-        setCmsImageUrl(base64String);
-        setHeroImageUrl(base64String);
-      } else if (target === 'left') {
-        setCmsLeftPortraitUrl(base64String);
-        setLeftPortraitUrl(base64String);
-      } else if (target === 'right') {
-        setCmsRightPortraitUrl(base64String);
-        setRightPortraitUrl(base64String);
-      } else if (target === 'dress') {
-        setCmsDressCodeImageUrl(base64String);
-        setDressCodeImageUrl(base64String);
-      } else if (target === 'map') {
-        setCmsMapImageUrl(base64String);
-        setMapImageUrl(base64String);
-      }
-
-      setUploadProgress(100);
-      setTimeout(() => {
-        setIsUploading(false);
-        setUploadProgress(0);
-      }, 350);
-
-    } catch (err: any) {
-      console.error('Browser image compression / database save error:', err);
-      alert(`Image processing failed: ${err.message || err}`);
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
-
-  const handleResetImage = async (target: 'hero' | 'left' | 'right' | 'dress' | 'map') => {
-    if (!window.confirm("Are you sure you want to revert to the default/fallback image asset?")) {
-      return;
-    }
-
-    let fieldKey = 'imageUrl';
-    let customKey = 'heroBg';
-    let defaultVal = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200';
-    if (target === 'left') {
-      fieldKey = 'leftPortraitUrl';
-      customKey = 'dateLeftPhoto';
-      defaultVal = 'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600';
-    } else if (target === 'right') {
-      fieldKey = 'rightPortraitUrl';
-      customKey = 'dateRightPhoto';
-      defaultVal = 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600';
-    } else if (target === 'dress') {
-      fieldKey = 'dressCodeImageUrl';
-      customKey = 'dressCodeStyleGraphic';
-      defaultVal = 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600';
-    } else if (target === 'map') {
-      fieldKey = 'mapImageUrl';
-      customKey = 'venueMapSketchGraphic';
-      defaultVal = '';
-    }
-
-    try {
-      setIsSavingContent(true);
-      const docRef = doc(db, 'site_content', 'main');
-      await setDoc(docRef, { 
-        [fieldKey]: '',
-        [customKey]: ''
-      }, { merge: true });
-
-      if (target === 'hero') {
-        setCmsImageUrl('');
-        setHeroImageUrl(defaultVal);
-      } else if (target === 'left') {
-        setCmsLeftPortraitUrl('');
-        setLeftPortraitUrl(defaultVal);
-      } else if (target === 'right') {
-        setCmsRightPortraitUrl('');
-        setRightPortraitUrl(defaultVal);
-      } else if (target === 'dress') {
-        setCmsDressCodeImageUrl('');
-        setDressCodeImageUrl(defaultVal);
-      } else if (target === 'map') {
-        setCmsMapImageUrl('');
-        setMapImageUrl('');
-      }
-
-      setIsSavingContent(false);
-    } catch (err: any) {
-      console.error('Error resetting image:', err);
-      alert(`Error resetting image: ${err.message || err}`);
-      setIsSavingContent(false);
-    }
-  };
 
   const handleSaveCmsContent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1734,7 +1382,7 @@ export default function App() {
                   {/* Prominent Auto-Save and Firestore Push Trigger Button */}
                   <button
                     type="submit"
-                    disabled={isSavingContent || isUploading}
+                    disabled={isSavingContent}
                     className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-olive-drab hover:bg-[#4E4B42] text-white tracking-widest font-sans text-xs font-bold transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-wait shadow-md shrink-0 uppercase active:scale-[0.98]"
                   >
                     <Lock size={12} className={isSavingContent ? 'animate-pulse' : ''} />
@@ -2009,7 +1657,7 @@ export default function App() {
 
                   <button
                     type="submit"
-                    disabled={isSavingContent || isUploading}
+                    disabled={isSavingContent}
                     className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-olive-drab hover:bg-[#4E4B42] text-white tracking-widest font-sans text-xs font-bold transition-all duration-300 cursor-pointer disabled:opacity-50"
                   >
                     <span>✓ SAVE &amp; BUILD SITE</span>
@@ -2021,191 +1669,107 @@ export default function App() {
         )}
 
         {adminTab === 'images' && (
-          <div className="flex flex-col gap-8 mt-4">
+          <div className="flex flex-col gap-6 mt-4">
             <div className="bg-[#FAF8F5]/80 backdrop-blur-xs border border-earth-dark/5 rounded-2xl p-6 sm:p-8 shadow-xs text-left">
               <div className="border-b border-earth-dark/5 pb-4 mb-6">
                 <h2 className="font-serif text-2xl font-light text-earth-dark flex items-center gap-2 select-text">
                   <span>🖼️ Global Image Assets Registry</span>
                 </h2>
                 <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
-                  All image management slots here support direct drag-and-drop file ingestion. When you drop an image (or tap to choose a local file), the file is dynamically compressed inside your browser down to your target footprint, and stored as an efficient Base64 data string directly inside Firestore. This handles raw, massive camera uploads (up to <strong className="text-earth-dark font-medium">50MB+</strong>) instantly, completely self-contained within your browser without using external servers or media storage providers.
+                  All image assets on your wedding website are managed statically for maximum performance, caching, and loading speed. Simply enter the static relative path (e.g. <code className="font-mono bg-stone-100 px-1 py-0.5 rounded">/images/hero.jpg</code>) or a web URL. High-resolution raw images can be added directly to your project's static assets folder.
                 </p>
               </div>
 
-              {/* Sleek Browser-Side Compression Controls */}
-              <div className="bg-white border border-earth-dark/5 p-4 sm:p-5 rounded-2xl mb-8 space-y-4">
-                <div className="flex flex-col gap-1 select-text">
-                  <h3 className="font-serif text-sm font-medium text-earth-dark flex items-center gap-1.5">
-                    <span>⚙️ Client-Side Compression Tuning Controls</span>
-                  </h3>
-                  <p className="font-sans text-[11px] text-[#A39E93]">
-                    Because images are fully self-contained in our secure database (Firestore limits any single document to 1MB total), we compress files on-the-fly. Balance your quality and size below:
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* Target File Size Slider */}
-                  <div className="space-y-1.5 select-text">
-                    <div className="flex justify-between items-center text-xs font-sans">
-                      <span className="font-medium text-earth-dark">Target Maximum Size:</span>
-                      <span className="font-mono text-olive-drab font-bold">
-                        {compressionTargetSize === 0.3 ? '300 KB (Recommended)' : `${Math.round(compressionTargetSize * 1000)} KB`}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1.5"
-                      step="0.1"
-                      value={compressionTargetSize}
-                      onChange={(e) => setCompressionTargetSize(parseFloat(e.target.value))}
-                      className="w-full accent-olive-drab h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-[9px] text-[#A39E93] font-mono">
-                      <span>100KB (Fastest Page Load)</span>
-                      <span>1500KB (Maximum Clarity Limit)</span>
-                    </div>
-                  </div>
-
-                  {/* Target Resolution boundary */}
-                  <div className="space-y-1.5 select-text">
-                    <div className="flex justify-between items-center text-xs font-sans">
-                      <span className="font-medium text-earth-dark">Target Resolution Limit:</span>
-                      <span className="font-mono text-olive-drab font-bold">{compressionMaxResolution}px</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[800, 1024, 1280, 1600].map((res) => (
-                        <button
-                          key={res}
-                          type="button"
-                          onClick={() => setCompressionMaxResolution(res)}
-                          className={`text-[10px] font-sans font-bold py-1.5 px-1 rounded transition-all duration-200 ${
-                            compressionMaxResolution === res
-                              ? 'bg-olive-drab text-white shadow-xs'
-                              : 'bg-[#FAF8F5] border border-stone-200 text-[#6E6A5F] hover:bg-stone-50'
-                          }`}
-                        >
-                          {res === 1280 ? '1280 (Std)' : `${res}px`}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="text-[9px] text-[#A39E93] text-right">
-                      {compressionMaxResolution <= 1024 ? 'Subtle details may be softer' : 'Brilliant clarity on high-density displays'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Warning Alert if settings exceed safety boundaries */}
-                {(compressionTargetSize > 0.4 || compressionMaxResolution > 1280) && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[11px] text-amber-800 flex items-start gap-2 select-text">
-                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="font-sans leading-relaxed">
-                      <strong>Safety Guard Warning:</strong> Storing images near <strong>{Math.round(compressionTargetSize * 1000)} KB</strong> is fully active, but since the 1MB Firestore limit is shared by all 5 image slots, configuring multiple custom images at this size will cause save failures. Keep targets around 150KB - 300KB to populate all wedding assets safely!
-                    </p>
-                  </div>
-                )}
+              {/* Status Alert if some paths are empty */}
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 text-[11.5px] text-amber-800 flex items-start gap-2 select-text mb-6">
+                <Info className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="font-sans leading-relaxed">
+                  <strong>💡 How this works:</strong> Clear any input to immediately revert that slot back to its beautifully curated local fallback asset. Clicking <strong>SAVE IMAGE REGISTRY</strong> at the bottom will apply your paths instantly across the live landing page.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Slot 1: Hero Banner Background Image */}
-                <ImageDropZone
+              <form onSubmit={handleSaveCmsContent} className="space-y-6">
+                <ImageAssetField
                   title="Hero Banner Background Image"
-                  description="The prominent fullscreen welcome photo supporting clean text styling at the bottom edge of the folding fold."
+                  description="The major fullscreen welcome photo supporting text overlay at the bottom of the fold."
                   currentValue={cmsImageUrl}
                   fallbackValue={defaultHeroImage}
-                  targetKey="hero"
-                  isUploading={isUploading}
-                  uploadProgress={uploadProgress}
-                  activeUploadTarget={activeUploadTarget}
-                  onFileSelect={startUpload}
-                  onReset={handleResetImage}
-                  metadata={imagesMetadata.hero}
+                  onChange={setCmsImageUrl}
+                  recommendedPaths={['/images/hero.jpg', '/images/hero_backup.jpg']}
                 />
 
-                {/* Slot 2: The Date Section - Left Floating Portrait */}
-                <ImageDropZone
+                <ImageAssetField
                   title="The Date Section - Left Floating Portrait"
-                  description="Supporting partner portrait photo (Sunset Tokyo Tower) aligned along the left margin of the date area."
+                  description="Partner portrait photo aligned along the left margin of the central wedding timeline."
                   currentValue={cmsLeftPortraitUrl}
                   fallbackValue="https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600"
-                  targetKey="left"
-                  isUploading={isUploading}
-                  uploadProgress={uploadProgress}
-                  activeUploadTarget={activeUploadTarget}
-                  onFileSelect={startUpload}
-                  onReset={handleResetImage}
-                  metadata={imagesMetadata.left}
+                  onChange={setCmsLeftPortraitUrl}
+                  recommendedPaths={['/images/left_portrait.jpg']}
                 />
 
-                {/* Slot 3: The Date Section - Right Floating Portrait */}
-                <ImageDropZone
+                <ImageAssetField
                   title="The Date Section - Right Floating Portrait"
-                  description="Supporting partner portrait photo (Nighttime Couple) symmetrically flanking the central date block."
+                  description="Partner portrait photo flanking the right margin of the central wedding timeline."
                   currentValue={cmsRightPortraitUrl}
                   fallbackValue="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600"
-                  targetKey="right"
-                  isUploading={isUploading}
-                  uploadProgress={uploadProgress}
-                  activeUploadTarget={activeUploadTarget}
-                  onFileSelect={startUpload}
-                  onReset={handleResetImage}
-                  metadata={imagesMetadata.right}
+                  onChange={setCmsRightPortraitUrl}
+                  recommendedPaths={['/images/right_portrait.jpg']}
                 />
 
-                {/* Slot 4: Dress Code Style Graphic */}
-                <ImageDropZone
+                <ImageAssetField
                   title="Dress Code Style Graphic"
-                  description="Inspirational mood board or style guide picture rendered gracefully alongside color palette swatches."
+                  description="Style guide mood board rendered graceside the color palette swatches."
                   currentValue={cmsDressCodeImageUrl}
                   fallbackValue="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600"
-                  targetKey="dress"
-                  isUploading={isUploading}
-                  uploadProgress={uploadProgress}
-                  activeUploadTarget={activeUploadTarget}
-                  onFileSelect={startUpload}
-                  onReset={handleResetImage}
-                  metadata={imagesMetadata.dress}
+                  onChange={setCmsDressCodeImageUrl}
+                  recommendedPaths={['/images/dress_code.jpg']}
                 />
 
-                {/* Slot 5: Venue Map Sketch Graphic */}
-                <ImageDropZone
+                <ImageAssetField
                   title="Venue Map Sketch Graphic"
-                  description="Replace the vector drawing with a hand-drawn illustration image. Clear file to fall back to the dynamic procedural SVG map."
+                  description="Standard hand-drawn picture. Clear this input to resort to the beautiful, interactive dynamic SVG map."
                   currentValue={cmsMapImageUrl}
                   fallbackValue=""
-                  targetKey="map"
-                  isUploading={isUploading}
-                  uploadProgress={uploadProgress}
-                  activeUploadTarget={activeUploadTarget}
-                  onFileSelect={startUpload}
-                  onReset={handleResetImage}
-                  metadata={imagesMetadata.map}
+                  onChange={setCmsMapImageUrl}
+                  recommendedPaths={['/images/venue_map.jpg']}
                 />
-              </div>
 
-              {/* Future Architectural Guardrail box */}
-              <div className="mt-10 border border-[#DECCA6]/30 p-6 rounded-2xl bg-[#FAF8F5]/90 relative overflow-hidden select-text">
-                <div className="absolute top-0 right-0 p-3 text-[10px] font-mono tracking-widest text-[#B5A57F] bg-[#FAF8F5] select-none border-l border-b border-[#DECCA6]/20">
-                  SEC_ARCH_GUARDRAIL
+                {/* Form Action Panel */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-earth-dark/5 mt-8 select-text">
+                  <div>
+                    {saveStatus === 'saved' && (
+                      <p className="font-sans text-xs text-olive-drab flex items-center gap-1">
+                        <Check className="w-4 h-4 shrink-0" />
+                        <span>Registry paths updated and deployed successfully!</span>
+                      </p>
+                    )}
+                    {saveStatus === 'saving' && (
+                      <p className="font-sans text-xs text-stone-500 animate-pulse flex items-center gap-1.5">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Updating Firestore registry document...</span>
+                      </p>
+                    )}
+                    {saveStatus === 'error' && (
+                      <p className="font-sans text-xs text-red-600 font-semibold select-text">
+                        ❌ Save failed: {saveErrorMessage}
+                      </p>
+                    )}
+                    {saveStatus === 'idle' && (
+                      <p className="font-sans text-[11px] text-[#A39E93]">
+                        Pending configuration modifications will apply live to all guest sessions upon save.
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingContent}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-olive-drab hover:bg-[#4E4B42] text-white tracking-widest font-sans text-xs font-bold transition-all duration-300 cursor-pointer disabled:opacity-50 w-full sm:w-auto justify-center"
+                  >
+                    <span>✓ SAVE IMAGE REGISTRY</span>
+                  </button>
                 </div>
-                <h3 className="font-serif text-lg font-light text-earth-dark mb-2 flex items-center gap-2">
-                  <span>🔒 Architectural Auto-Registration Guardrail & Protocol</span>
-                </h3>
-                <p className="font-sans text-xs text-[#6E6A5F] leading-relaxed mb-4">
-                  To ensure absolute editability and future-proof design extensibility, any new visual section, functional module, or image asset introduced to this wedding codebase must strictly adhere to the following framework convention:
-                </p>
-                <ul className="space-y-2 text-xs text-[#6E6A5F] font-sans list-disc list-inside">
-                  <li>
-                    <strong className="text-earth-dark font-semibold">Step 1 (Schema Mapping):</strong> Append a default URL property directly into the state list and the initial translations dictionary as local fallbacks.
-                  </li>
-                  <li>
-                    <strong className="text-earth-dark font-semibold">Step 2 (CMS Exposure):</strong> Register a matching file input or uploader target within the <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">startUpload</code> dispatcher, matching one-to-one with its Firestore key identifier.
-                  </li>
-                  <li>
-                    <strong className="text-earth-dark font-semibold">Step 3 (Automated Sync):</strong> The image upload lifecycle automatically routes file payloads to Firebase cloud storage, returns secure access streams, and updates the Firestore <code className="font-mono text-[10.5px] bg-stone-100 p-0.5 rounded text-neutral-800">site_content/main</code> document, immediately refreshing live previews gracefully without administrative effort.
-                  </li>
-                </ul>
-              </div>
+              </form>
             </div>
           </div>
         )}
