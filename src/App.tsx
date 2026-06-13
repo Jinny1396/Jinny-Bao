@@ -2111,7 +2111,7 @@ export default function App() {
         }}
       >
         {/* Smooth dark dim overlay tint */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+        <div className="absolute inset-0 bg-black/35" />
 
         {/* Centered names typography at bottom edge of screen fold */}
         <div className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]">
