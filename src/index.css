@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Inter:wght@200;300;400;500;600;700&family=Cedarville+Cursive&family=La+Belle+Aurore&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Inter:wght@200;300;400;500;600;700&family=Cedarville+Cursive&family=La+Belle+Aurore&family=Luxurious+Script&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -6,6 +6,7 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-handwriting: "La Belle Aurore", cursive;
   --font-journal: "Cedarville Cursive", cursive;
+  --font-luxurious: "Luxurious Script", cursive;
   --color-raw-earth: #F4F1EE;
   --color-earth-dark: #2A2A2A;
   --color-earth-accent: #6E685E;
@@ -13,6 +14,13 @@
   --color-olive-light: #8E9482;
   --color-sage: #B4BCAB;
   --color-petal-pink: #E8DDDB;
+}
+
+h1 {
+  font-family: var(--font-luxurious), cursive !important;
+  font-size: 100px;
+  line-height: 0.8;
+  color: #FFE4E9 !important;
 }
 
 body {
