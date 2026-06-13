@@ -2104,19 +2104,26 @@ export default function App() {
       {/* SECTION 1: THE CLEAN HERO BANNER */}
       <section 
         id="hero" 
-        className="h-screen w-full relative bg-cover bg-center bg-no-repeat flex flex-col justify-end items-center pb-2 select-none overflow-hidden"
+        className="h-screen w-full relative bg-cover bg-center bg-no-repeat flex flex-col justify-end items-center pb-6 select-none overflow-hidden"
         style={{ 
           backgroundImage: `url(${heroImageUrl})`,
           backgroundAttachment: 'fixed'
         }}
       >
         {/* Smooth dark dim overlay tint */}
-        <div className="absolute inset-0 bg-black/35" />
+        <div className="absolute inset-0 bg-black/15" />
 
         {/* Centered names typography at bottom edge of screen fold */}
         <div className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]">
-          <h1 className="text-[100px] md:text-[180px] font-luxurious leading-[80px] md:leading-[110px] text-[#FFE4E9] drop-shadow-md select-text">
-            {t.weddingName}
+          <h1 className="text-[100px] md:text-[180px] font-luxurious leading-[80px] md:leading-[120px] text-[#FFE4E9] drop-shadow-md select-text">
+            {t.weddingName.includes('&') ? (
+              <>
+                <span className="block">{t.weddingName.split('&')[0].trim()}</span>
+                <span className="block">&amp; {t.weddingName.split('&')[1].trim()}</span>
+              </>
+            ) : (
+              t.weddingName
+            )}
           </h1>
         </div>
       </section>
