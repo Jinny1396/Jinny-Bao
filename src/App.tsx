@@ -139,6 +139,8 @@ interface ImageAssetFieldProps {
   fallbackValue: string;
   onChange: (val: string) => void;
   recommendedPaths: string[];
+  onUploadClick: () => void;
+  uploadState?: { isUploading: boolean; progress: number; error?: string };
 }
 
 const ImageAssetField: React.FC<ImageAssetFieldProps> = ({
@@ -148,6 +150,8 @@ const ImageAssetField: React.FC<ImageAssetFieldProps> = ({
   fallbackValue,
   onChange,
   recommendedPaths,
+  onUploadClick,
+  uploadState,
 }) => {
   const activeImage = currentValue || fallbackValue;
 
@@ -185,15 +189,46 @@ const ImageAssetField: React.FC<ImageAssetFieldProps> = ({
 
         {/* Path configuration inputs and presets */}
         <div className="flex-1 w-full space-y-2">
-          <div>
+          <div className="flex gap-2 items-center">
             <input 
               type="text"
               value={currentValue}
               onChange={(e) => onChange(e.target.value)}
               placeholder={`e.g. ${recommendedPaths[0]}`}
-              className="w-full rounded-xl border border-stone-200 bg-[#FAF8F5] px-3.5 py-2 text-xs font-sans text-earth-dark focus:border-olive-drab focus:outline-none placeholder:text-stone-400 shadow-inner"
+              className="flex-1 rounded-xl border border-stone-200 bg-[#FAF8F5] px-3.5 py-2 text-xs font-sans text-earth-dark focus:border-olive-drab focus:outline-none placeholder:text-stone-400 shadow-inner"
             />
+            <button
+              type="button"
+              onClick={onUploadClick}
+              disabled={uploadState?.isUploading}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-earth-accent/10 hover:bg-earth-accent/20 text-earth-dark text-[11px] font-semibold tracking-wider font-sans transition-all duration-200 cursor-pointer shrink-0 disabled:opacity-50"
+              title="Upload image using Cloudinary Widget"
+            >
+              <Upload size={12} className="text-earth-accent" />
+              <span>Upload</span>
+            </button>
           </div>
+
+          {uploadState?.isUploading && (
+            <div className="w-full mt-1 px-1">
+              <div className="flex justify-between items-center text-[10px] font-sans text-stone-500 mb-1 animate-pulse">
+                <span>Uploading to Cloudinary...</span>
+                <span>{uploadState.progress}%</span>
+              </div>
+              <div className="w-full h-1 bg-stone-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-olive-drab transition-all duration-300"
+                  style={{ width: `${uploadState.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {uploadState?.error && (
+            <p className="text-[10px] text-red-600 font-sans mt-0.5 px-1">
+              ⚠️ {uploadState.error}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <span className="text-[9px] uppercase tracking-wider font-sans text-stone-400 select-none mr-1">
@@ -274,6 +309,22 @@ export default function App() {
     '#5E6B5C',
     '#3D3B36'
   ]);
+
+  // Cloudinary Integration States
+  const [cloudinaryCloudName, setCloudinaryCloudName] = useState<string>('dcgtz1nwr');
+  const [cloudinaryUploadPreset, setCloudinaryUploadPreset] = useState<string>('wedding_unsigned_preset');
+  const [uploadStates, setUploadStates] = useState<Record<string, { isUploading: boolean; progress: number; error: string }>>({});
+
+  useEffect(() => {
+    const scriptId = 'cloudinary-upload-widget-script';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://upload-widget.cloudinary.com/global/all.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   const [isSavingContent, setIsSavingContent] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -385,6 +436,13 @@ export default function App() {
             const finalColors = loadedColors.slice(0, 5);
             setPaletteColors(finalColors);
             setCmsPaletteColors(finalColors);
+          }
+
+          if (data.cloudinaryCloudName) {
+            setCloudinaryCloudName(data.cloudinaryCloudName);
+          }
+          if (data.cloudinaryUploadPreset) {
+            setCloudinaryUploadPreset(data.cloudinaryUploadPreset);
           }
         }
       } catch (err) {
@@ -533,6 +591,8 @@ export default function App() {
         mapImageUrl: cmsMapImageUrl,
         venueMapSketchGraphic: cmsMapImageUrl,
         paletteColors: cmsPaletteColors,
+        cloudinaryCloudName,
+        cloudinaryUploadPreset,
         updatedAt: new Date().toISOString(),
       });
 
@@ -554,6 +614,88 @@ export default function App() {
     } finally {
       setIsSavingContent(false);
     }
+  };
+
+  const openCloudinaryUploader = (targetKey: 'hero' | 'left' | 'right' | 'dress' | 'map') => {
+    const cloudinaryObj = (window as any).cloudinary;
+    if (!cloudinaryObj) {
+      alert('The Cloudinary script is loading or failed to load. Please make sure you have internet access and refresh the page to load the uploader widget.');
+      return;
+    }
+
+    setUploadStates(prev => ({
+      ...prev,
+      [targetKey]: { isUploading: true, progress: 0, error: '' }
+    }));
+
+    const widget = cloudinaryObj.createUploadWidget(
+      {
+        cloudName: cloudinaryCloudName,
+        uploadPreset: cloudinaryUploadPreset,
+        theme: 'minimal',
+        styles: {
+          palette: {
+            window: '#FAF8F5',
+            windowBorder: '#DECCA6',
+            tabIcon: '#5E6B5C',
+            menuIcons: '#5E6B5C',
+            textDark: '#3D3B36',
+            textLight: '#FFFFFF',
+            link: '#8A9A86',
+            action: '#5E6B5C',
+            inactiveTabIcon: '#A39E93',
+            error: '#B91C1C',
+            inProgress: '#8A9A86',
+            complete: '#5E6B5C',
+            sourceBg: '#FAF8F5'
+          }
+        },
+        multiple: false,
+        clientAllowedFormats: ['jpeg', 'jpg', 'png', 'webp'],
+        maxFileSize: 30 * 1024 * 1024,
+      },
+      (error: any, result: any) => {
+        if (error) {
+          console.error('Cloudinary Widget Error:', error);
+          setUploadStates(prev => ({
+            ...prev,
+            [targetKey]: { isUploading: false, progress: 0, error: error.message || 'Load failure' }
+          }));
+          return;
+        }
+
+        if (result && result.event === 'upload-progress') {
+          const progressValue = result.info.progress || 0;
+          setUploadStates(prev => ({
+            ...prev,
+            [targetKey]: { isUploading: true, progress: progressValue, error: '' }
+          }));
+        }
+
+        if (result && result.event === 'success') {
+          const url = result.info.secure_url;
+          
+          if (targetKey === 'hero') setCmsImageUrl(url);
+          else if (targetKey === 'left') setCmsLeftPortraitUrl(url);
+          else if (targetKey === 'right') setCmsRightPortraitUrl(url);
+          else if (targetKey === 'dress') setCmsDressCodeImageUrl(url);
+          else if (targetKey === 'map') setCmsMapImageUrl(url);
+
+          setUploadStates(prev => ({
+            ...prev,
+            [targetKey]: { isUploading: false, progress: 100, error: '' }
+          }));
+
+          confetti({
+            particleCount: 40,
+            spread: 55,
+            origin: { y: 0.85 }
+          });
+        }
+      }
+    );
+
+    widget.open();
   };
 
   const renderTextInput = (label: string, valueKey: keyof Translations, placeholder: string = '') => {
@@ -1676,8 +1818,40 @@ export default function App() {
                   <span>🖼️ Global Image Assets Registry</span>
                 </h2>
                 <p className="font-sans text-xs text-[#6E6A5F] mt-1.5 select-text leading-relaxed">
-                  All image assets on your wedding website are managed statically for maximum performance, caching, and loading speed. Simply enter the static relative path (e.g. <code className="font-mono bg-stone-100 px-1 py-0.5 rounded">/images/hero.jpg</code>) or a web URL. High-resolution raw images can be added directly to your project's static assets folder.
+                  All image assets on your wedding website are managed statically for maximum performance, caching, and loading speed. Simply enter the static relative path (e.g. <code className="font-mono bg-stone-100 px-1 py-0.5 rounded">/images/hero.jpg</code>), a web URL, or use Cloudinary to upload the assets live!
                 </p>
+              </div>
+
+              {/* Cloudinary live integration settings box */}
+              <div className="bg-[#8A9A86]/5 border border-olive-drab/10 rounded-2xl p-5 mb-6 text-stone-700">
+                <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-earth-accent mb-2.5 flex items-center gap-1.5">
+                  <span>☁️ Cloudinary Live Integration Settings</span>
+                </h3>
+                <p className="text-[11.5px] text-[#6E6A5F] leading-relaxed mb-4">
+                  For your wedding and guest family uploads to save directly in the cloud, configure your <strong>Unsigned Upload Preset</strong>. Changes are saved to secure Firestore shards.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1 text-left">
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-stone-400">Cloudinary Cloud Name</label>
+                    <input
+                      type="text"
+                      className="px-3.5 py-2 rounded-xl bg-white border border-stone-200 font-sans text-xs text-earth-dark focus:border-olive-drab focus:outline-none placeholder:text-stone-300"
+                      value={cloudinaryCloudName}
+                      onChange={(e) => setCloudinaryCloudName(e.target.value)}
+                      placeholder="e.g. dcgtz1nwr"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 text-left">
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-stone-400">Unsigned Upload Preset</label>
+                    <input
+                      type="text"
+                      className="px-3.5 py-2 rounded-xl bg-white border border-stone-200 font-sans text-xs text-earth-dark focus:border-olive-drab focus:outline-none placeholder:text-stone-300"
+                      value={cloudinaryUploadPreset}
+                      onChange={(e) => setCloudinaryUploadPreset(e.target.value)}
+                      placeholder="e.g. wedding_unsigned_preset"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Status Alert if some paths are empty */}
@@ -1696,6 +1870,8 @@ export default function App() {
                   fallbackValue={defaultHeroImage}
                   onChange={setCmsImageUrl}
                   recommendedPaths={['/images/hero.jpg', '/images/hero_backup.jpg']}
+                  onUploadClick={() => openCloudinaryUploader('hero')}
+                  uploadState={uploadStates['hero']}
                 />
 
                 <ImageAssetField
@@ -1705,6 +1881,8 @@ export default function App() {
                   fallbackValue="https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&q=80&w=600"
                   onChange={setCmsLeftPortraitUrl}
                   recommendedPaths={['/images/left_portrait.jpg']}
+                  onUploadClick={() => openCloudinaryUploader('left')}
+                  uploadState={uploadStates['left']}
                 />
 
                 <ImageAssetField
@@ -1714,6 +1892,8 @@ export default function App() {
                   fallbackValue="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600"
                   onChange={setCmsRightPortraitUrl}
                   recommendedPaths={['/images/right_portrait.jpg']}
+                  onUploadClick={() => openCloudinaryUploader('right')}
+                  uploadState={uploadStates['right']}
                 />
 
                 <ImageAssetField
@@ -1723,6 +1903,8 @@ export default function App() {
                   fallbackValue="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=600"
                   onChange={setCmsDressCodeImageUrl}
                   recommendedPaths={['/images/dress_code.jpg']}
+                  onUploadClick={() => openCloudinaryUploader('dress')}
+                  uploadState={uploadStates['dress']}
                 />
 
                 <ImageAssetField
@@ -1732,6 +1914,8 @@ export default function App() {
                   fallbackValue=""
                   onChange={setCmsMapImageUrl}
                   recommendedPaths={['/images/venue_map.jpg']}
+                  onUploadClick={() => openCloudinaryUploader('map')}
+                  uploadState={uploadStates['map']}
                 />
 
                 {/* Form Action Panel */}
