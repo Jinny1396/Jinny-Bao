@@ -115,11 +115,154 @@ const MinimalRoseDetail = () => (
     className="w-20 md:w-28 h-auto opacity-15 stroke-earth-accent fill-none stroke-[0.8]"
     aria-hidden="true"
   >
-    <path d="M 60,60 C 50,45 40,40 30,50 C 20,60 30,70 45,65 C 30,75 25,85 35,95 C 45,105 55,90 55,75 C 60,95 70,105 80,95 C 90,85 85,75 70,65 C 85,70 95,60 85,50 C 75,40 65,45 55,60 Z" />
+    <path d="M 60,60 C 50,45 40,40 30,50 C 20,60 30,70 45,65 C 30,75 25,85 35,95 C 45,105 55,90 55,75 C 60,95 70,105 80,95 Q 90,85 85,75 C 70,65 C 85,70 95,60 85,50 C 75,40 65,45 55,60 Z" />
     <path d="M 60,60 C 65,55 70,45 65,35 C 60,25 50,30 55,45" />
     <circle cx="60" cy="61" r="3" className="fill-earth-accent" />
   </svg>
 );
+
+// High-end custom parallax scroll wrapper for individual elements
+interface ParallaxItemProps {
+  className?: string;
+  speed: number; // e.g. -0.05 to 0.05
+  children: React.ReactNode;
+}
+
+const ParallaxItem: React.FC<ParallaxItemProps> = ({ className = '', speed, children }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [yOffset, setYOffset] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+    const handleParallax = () => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      
+      // Calculate distanceFromCenter from the viewport middle
+      const itemCenter = rect.top + rect.height / 2;
+      const viewCenter = windowHeight / 2;
+      const distanceFromCenter = itemCenter - viewCenter;
+      
+      // Calculate dynamic offset based on scroll position relative to viewport
+      setYOffset(distanceFromCenter * speed);
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(handleParallax);
+        ticking = true;
+      }
+    };
+
+    // Calculate immediately on mount
+    handleParallax();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [speed]);
+
+  return (
+    <div 
+      ref={ref} 
+      className={className} 
+      style={{ transform: `translateY(${yOffset}px)`, transition: 'transform 0.15s cubic-bezier(0.1, 0.8, 0.2, 1)' }}
+    >
+      {children}
+    </div>
+  );
+};
+
+// High-end off-white textured embossed double-swan wax-seal component
+const SwanSeal: React.FC<{ className?: string }> = ({ className = '' }) => {
+  return (
+    <div className={`relative ${className} w-20 h-20 sm:w-24 sm:h-24 select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.06)] active:scale-95 transition-transform duration-300`}>
+      <svg viewBox="0 0 100 100" className="w-full h-full fill-none">
+        <defs>
+          <radialGradient id="sealGrad" cx="50%" cy="50%" r="50%" fx="35%" fy="35%">
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="65%" stopColor="#FAF8F5" />
+            <stop offset="85%" stopColor="#E6E0D8" />
+            <stop offset="100%" stopColor="#D4CABE" />
+          </radialGradient>
+          <filter id="embossFilter" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="-0.4" dy="-0.4" stdDeviation="0.4" floodColor="#ffffff" floodOpacity="0.95" />
+            <feDropShadow dx="0.6" dy="0.6" stdDeviation="0.6" floodColor="#8B7E74" floodOpacity="0.32" />
+          </filter>
+        </defs>
+        
+        {/* Outer Circle with textured paper gradient */}
+        <circle cx="50" cy="50" r="45" fill="url(#sealGrad)" />
+        
+        {/* Fine concentric dashed rim */}
+        <circle cx="50" cy="50" r="40" stroke="#CDBCAC" strokeWidth="0.8" strokeDasharray="1.5,2.5" opacity="0.65" />
+        
+        {/* Inner raised design (swans & heart) */}
+        <g filter="url(#embossFilter)" opacity="0.8">
+          {/* Heart frame border */}
+          <path 
+            d="M 50 24 C 42 16, 26 22, 28 38 C 30 50, 44 60, 50 66 C 56 60, 70 50, 72 38 C 74 22, 58 16, 50 24 Z" 
+            stroke="#BCADA0" 
+            strokeWidth="1.2" 
+            fill="none" 
+          />
+          
+          {/* Left Swan */}
+          <path 
+            d="M 42 46 C 43.5 42.5, 42 38, 44 36 C 44.8 35, 46 35.5, 45.5 36.8 C 44.5 38.5, 45.2 40, 46 41 C 47.5 42.5, 48.2 44.5, 48 46.8 C 47.8 50, 44.5 51, 42 51 C 38 51, 36.2 48.5, 37.5 46.5 C 39 44.2, 41.8 43.8, 43.5 44.8 C 41 46, 39.5 47.8, 39.8 49.2 C 40 49.8, 40.8 50.2, 41.4 49.8 C 42.2 49.2, 43 48, 42.8 47"
+            stroke="#BCADA0" 
+            strokeWidth="0.9" 
+            strokeLinecap="round"
+            fill="none" 
+          />
+
+          {/* Right Swan (Mirrored) */}
+          <path 
+            d="M 58 46 C 56.5 42.5, 58 38, 56 36 C 55.2 35, 54 35.5, 54.5 36.8 C 55.5 38.5, 54.8 40, 54 41 C 52.5 42.5, 51.8 44.5, 52 46.8 C 52.2 50, 55.5 51, 58 51 C 62 51, 63.8 48.5, 62.5 46.5 C 61 44.2, 58.2 43.8, 56.5 44.8 C 59 46, 60.5 47.8, 60.2 49.2 C 60 49.8, 59.2 50.2, 58.6 49.8 C 57.8 49.2, 57 48, 57.2 47"
+            stroke="#BCADA0" 
+            strokeWidth="0.9" 
+            strokeLinecap="round"
+            fill="none" 
+          />
+          
+          <circle cx="50" cy="73" r="1" fill="#BCADA0" />
+          <path d="M 44 70 C 46 71.2, 48 72.2, 50 73 C 52 72.2, 54 71.2, 56 70" stroke="#BCADA0" strokeWidth="0.6" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
+  );
+};
+
+// Exquisite Polaroid card with shadow and natural paper tilt
+interface PolaroidProps {
+  src: string;
+  alt: string;
+  landscape?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+}
+
+const Polaroid: React.FC<PolaroidProps> = ({ src, alt, landscape = false, className = '', children }) => {
+  return (
+    <div className={`p-3 pb-8 sm:p-4 sm:pb-12 bg-[#FAF8F5] border border-black/[0.03] shadow-[0_12px_36px_rgba(42,42,42,0.06)] hover:shadow-[0_20px_48px_rgba(42,42,42,0.09)] transition-all duration-500 rounded-xs select-none relative flex flex-col ${className}`}>
+      <div className={`relative w-full overflow-hidden ${landscape ? 'aspect-[4/3]' : 'aspect-[3/4]'} bg-[#EDEAE5] rounded-xs`}>
+        <img 
+          src={src} 
+          alt={alt}
+          className="w-full h-full object-cover grayscale-[8%] hover:grayscale-0 transition-all duration-700 hover:scale-[1.02]"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-x-0 bottom-0 top-0 ring-1 ring-inset ring-black/[0.04] rounded-xs pointer-events-none" />
+      </div>
+      {children}
+    </div>
+  );
+};
 
 // Ambient Falling Petal Component
 interface Petal {
@@ -2152,110 +2295,225 @@ export default function App() {
         </div>
       </section>
 
-      {/* Main Content Lookbook wrapper - meticulously padded */}
-      <main className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 lg:pl-32 lg:pr-12 py-12">
-        
-        {/* SECTION 2: THE COMPACT "THE DATE" AREA */}
-        <section 
-          id="the-date" 
-          className="min-h-[85vh] py-16 relative flex flex-col justify-center items-center scroll-mt-12"
-        >
-          {/* Symmetrical date flanking layout */}
-          <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center justify-center">
+      {/* SECTION 2: THE COMPACT "THE DATE" AREA WITH POLAROID COLLAGE & PARALLAX SCROLL */}
+      <section 
+        id="the-date" 
+        className="relative w-full py-16 md:py-32 px-4 md:px-12 bg-[#F4F1EE] text-earth-dark/90 flex flex-col items-center justify-start scroll-mt-12 min-h-[155vh] md:min-h-[205vh] overflow-hidden"
+      >
+        {/* Central Block: Meticulously designed editorial typography, dates, and countdown */}
+        <div className="z-0 md:absolute md:top-[42%] md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 text-center flex flex-col items-center max-w-xl w-full select-all px-4">
+          {/* Symmetrical Dual-Bride/Groom Name Layout in Luxurious Script */}
+            <div className="flex flex-col items-center text-[#2A2A2A] font-serif">
+              <div className="flex items-center gap-6 sm:gap-14">
+                {/* Left side couple representation */}
+                <div className="text-right">
+                  <div 
+                    className="text-4xl sm:text-5xl lg:text-[54px] text-[#2A2A2A] leading-none tracking-tight font-medium" 
+                    style={{ fontFamily: '"Luxurious Script", cursive' }}
+                  >
+                    {t.weddingName.includes('&') ? t.weddingName.split('&')[0].trim() : 'Gia Bảo'}
+                  </div>
+                  <div 
+                    className="text-2xl sm:text-3xl lg:text-[38px] text-earth-accent italic font-light leading-none mt-1"
+                    style={{ fontFamily: '"Luxurious Script", cursive' }}
+                  >
+                    {t.weddingName.includes('&') ? `& ${t.weddingName.split('&')[1].trim()}` : '& John'}
+                  </div>
+                </div>
+
+                {/* Ornate ampersand separator */}
+                <div className="text-xl sm:text-2xl font-serif italic text-earth-accent/40 select-none">
+                  &amp;
+                </div>
+
+                {/* Right side couple representation (mirrored composition) */}
+                <div className="text-left">
+                  <div 
+                    className="text-4xl sm:text-5xl lg:text-[54px] text-[#2A2A2A] leading-none tracking-tight font-medium" 
+                    style={{ fontFamily: '"Luxurious Script", cursive' }}
+                  >
+                    {t.weddingName.includes('&') ? t.weddingName.split('&')[0].trim() : 'Gia Bảo'}
+                  </div>
+                  <div 
+                    className="text-2xl sm:text-3xl lg:text-[38px] text-earth-accent italic font-light leading-none mt-1"
+                    style={{ fontFamily: '"Luxurious Script", cursive' }}
+                  >
+                    {t.weddingName.includes('&') ? `& ${t.weddingName.split('&')[1].trim()}` : '& John'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Slogan banner */}
+              <div 
+                className="mt-5 text-3xl sm:text-4xl lg:text-[44px] text-earth-accent tracking-wide italic select-text"
+                style={{ fontFamily: '"Luxurious Script", cursive' }}
+              >
+                {lang === 'ENG' ? 'are getting married' : 'sắp sửa về chung một nhà'}
+              </div>
+            </div>
+
+            {/* Symmetrical Dividers enclosing the Wedding Narrative */}
+            <div className="w-full h-[0.7px] bg-[#2A2A2A]/15 my-5 max-w-sm"></div>
+            <p className="max-w-md font-serif text-[13px] sm:text-[14px] leading-relaxed text-earth-dark/90 italic font-light text-center px-4 select-text">
+              {t.heroVibeText}
+            </p>
+            <div className="w-full h-[0.7px] bg-[#2A2A2A]/15 my-5 max-w-sm"></div>
+
+            {/* Flanked date, location columns exactly mimicking the lookbook */}
+            <div className="w-full max-w-md grid grid-cols-3 gap-2 items-center justify-center text-center font-serif text-[10px] sm:text-[11px] tracking-[0.2em] text-[#2A2A2A] pt-1 uppercase">
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-semibold tracking-normal text-[#2A2A2A]">10</span>
+                <span className="text-[8px] sm:text-[9px] tracking-widest text-[#8F887C] font-semibold mt-1">
+                  {lang === 'ENG' ? 'OCT, 2026' : 'T10, 2026'}
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center border-x border-[#2A2A2A]/10 px-1 sm:px-2">
+                <span className="font-bold tracking-widest text-[#2A2A2A] text-[9px] sm:text-[10px]">
+                  {t.portland.includes(',') ? t.portland.split(',')[0].trim().toUpperCase() : 'PORTLAND'}
+                </span>
+                <span className="text-[8px] sm:text-[9px] tracking-widest text-[#8F887C] font-semibold mt-0.5">
+                  {t.portland.includes(',') ? t.portland.split(',')[1].trim().toUpperCase() : 'OREGON'}
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-semibold tracking-normal text-[#2A2A2A]">10</span>
+                <span className="text-[8px] sm:text-[9px] tracking-widest text-[#8F887C] font-semibold mt-1">
+                  {lang === 'ENG' ? 'OCT, 2026' : 'T10, 2026'}
+                </span>
+              </div>
+            </div>
+
+            {/* Inobtrusive Minimal Ring Countdown Indicator */}
+            <div className="mt-8 px-5 py-2 bg-white/20 border border-black/[0.03] rounded-full flex gap-4 items-center justify-center font-sans text-[10px] tracking-widest text-[#5C564D] shadow-xs select-none">
+              <div className="flex gap-1 items-baseline">
+                <span className="font-serif text-xs sm:text-sm text-[#2A2A2A] font-medium">{countdown.days}</span>
+                <span className="text-[7.5px] text-[#A39A8E] uppercase font-bold">{lang === 'ENG' ? 'D' : 'N'}</span>
+              </div>
+              <div className="text-earth-dark/20 text-xs">•</div>
+              <div className="flex gap-1 items-baseline">
+                <span className="font-serif text-xs sm:text-sm text-[#2A2A2A] font-medium">{countdown.hours}</span>
+                <span className="text-[7.5px] text-[#A39A8E] uppercase font-bold">H</span>
+              </div>
+              <div className="text-earth-dark/20 text-xs">•</div>
+              <div className="flex gap-1 items-baseline">
+                <span className="font-serif text-xs sm:text-sm text-[#2A2A2A] font-medium">{countdown.minutes}</span>
+                <span className="text-[7.5px] text-[#A39A8E] uppercase font-bold">M</span>
+              </div>
+              <div className="text-earth-dark/20 text-xs">•</div>
+              <div className="flex gap-1 items-baseline">
+                <span className="font-serif text-xs sm:text-sm text-[#2A2A2A] font-medium">{countdown.seconds}</span>
+                <span className="text-[7.5px] text-[#A39A8E] uppercase font-bold">S</span>
+              </div>
+            </div>
+          </div>
+
+          {/* DESKTOP COLLAGE VIEW: High-end Absolute + Parallax Scrolling Positions */}
+          <div className="hidden md:block absolute inset-0 w-full h-full pointer-events-none select-none z-1">
             
-            {/* Supporting left portrait (Sunset Tokyo Tower Image) */}
-            <div className="lg:col-span-3 flex justify-center order-2 lg:order-1 select-text">
-              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
-                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                  <img 
-                    src={leftPortraitUrl} 
-                    alt="Sunset Tokyo Tower" 
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
-                </div>
+            {/* Polaroid 1 (Top-Right): Dreamy pathway view */}
+            <ParallaxItem speed={-0.06} className="absolute top-[4%] right-[6%] w-[270px] lg:w-[320px] pointer-events-auto z-5">
+              <Polaroid 
+                src="https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&q=80&w=600" 
+                alt="Enchanting wedding pathway forest" 
+                landscape 
+              />
+            </ParallaxItem>
+
+            {/* Polaroid 2 (Middle-Left): Overlooking Water with top-right double-swan seal */}
+            <ParallaxItem speed={0.05} className="absolute top-[20%] left-[5%] w-[230px] lg:w-[275px] pointer-events-auto z-15">
+              <div className="relative">
+                <Polaroid 
+                  src={leftPortraitUrl} 
+                  alt="Wedding Couple overlooking waterside" 
+                />
+                <SwanSeal className="absolute -top-7 -right-7 z-25 drop-shadow-[2px_4px_12px_rgba(0,0,0,0.08)]" />
               </div>
+            </ParallaxItem>
+
+            {/* Polaroid 3 (Middle-Right): B&W couple dance celebrating */}
+            <ParallaxItem speed={-0.03} className="absolute top-[42%] right-[5%] w-[260px] lg:w-[310px] pointer-events-auto z-5">
+              <Polaroid 
+                src={rightPortraitUrl} 
+                alt="Aesthetic couple romantic dance" 
+                landscape 
+              />
+            </ParallaxItem>
+
+            {/* Polaroid 4 (Bottom-Middle): Quiet path across tall pines */}
+            <ParallaxItem speed={0.02} className="absolute top-[68%] left-1/2 -translate-x-1/2 w-[280px] lg:w-[340px] pointer-events-auto z-5">
+              <Polaroid 
+                src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&q=80&w=600" 
+                alt="Forest pathways of mountain gorge" 
+                landscape 
+              />
+            </ParallaxItem>
+
+            {/* Polaroid 5 (Bottom-Right): Gracious bride holding bouquet with top-left double-swan seal */}
+            <ParallaxItem speed={-0.04} className="absolute top-[78%] right-[8%] w-[220px] lg:w-[265px] pointer-events-auto z-15">
+              <div className="relative">
+                <Polaroid 
+                  src={dressCodeImageUrl} 
+                  alt="Bride holding delicate flowers" 
+                />
+                <SwanSeal className="absolute -top-7 -left-7 z-25 drop-shadow-[-2px_4px_12px_rgba(0,0,0,0.08)]" />
+              </div>
+            </ParallaxItem>
+
+          </div>
+
+          {/* MOBILE & TABLET STAGGERED FLOW: Pure-performance vertical masonry list */}
+          <div className="md:hidden flex flex-col gap-6 w-full max-w-sm mt-8 relative z-5">
+            {/* Polaroid 1 (Top-Right substitute) */}
+            <div className="w-full transform -rotate-1 shadow-md">
+              <Polaroid 
+                src="https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&q=80&w=600" 
+                alt="Scenic cottage woods" 
+                landscape 
+              />
             </div>
 
-            {/* Central Block: Perfect Center text blocks, dates, and countdown */}
-            <div className="lg:col-span-6 flex flex-col items-center text-center px-4 order-1 lg:order-2 select-text">
-              <div className="flex flex-col gap-2 items-center mb-6">
-                <span className="text-[10px] tracking-[0.35em] font-sans text-earth-accent uppercase leading-none block font-bold select-text">
-                  {t.gatheringHeader}
-                </span>
-                <span className="text-xs font-serif italic text-earth-accent font-light select-text">
-                  {t.gatheringSub}
-                </span>
-              </div>
-
-              {/* The Vibe Narrative Block */}
-              <p className="max-w-md font-serif text-base sm:text-lg text-earth-accent font-light leading-relaxed mb-8 select-text">
-                {t.heroVibeText}
-              </p>
-
-              {/* Specific Date & Address details */}
-              <div className="flex flex-col sm:flex-row gap-4 items-center justify-center font-sans text-[11px] tracking-[0.25em] text-earth-dark/70 mb-10 select-all border-y border-earth-dark/10 py-4 w-full max-w-md">
-                <div className="flex items-center gap-2">
-                  <span className="text-olive-light font-bold">10</span>
-                  <span className="font-semibold">{t.october}</span>
-                </div>
-                <div className="hidden sm:inline text-earth-dark/20">•</div>
-                <div>{t.portland}</div>
-                <div className="hidden sm:inline text-earth-[#8A9A86]/40">•</div>
-                <span className="font-serif italic font-normal text-xs text-earth-dark lowercase">{t.wildMeadow}</span>
-              </div>
-
-              {/* Minimalist Countdown Timer Section */}
-              <div className="w-full border border-earth-dark/10 p-6 rounded-2xl bg-white/30 backdrop-blur-xs grid grid-cols-4 gap-4 relative">
-                {/* Countdown Days */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownDays}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.days}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.days)}</span>
-                </div>
-
-                {/* Countdown Hours */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownHours}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.hours}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.hours)}</span>
-                </div>
-
-                {/* Countdown Minutes */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownMinutes}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.minutes}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.minutes)}</span>
-                </div>
-
-                {/* Countdown Seconds */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] tracking-[0.2em] font-sans text-earth-accent uppercase mb-1 font-bold">{t.countdownSeconds}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-light">{countdown.seconds}</span>
-                  <span className="text-[8px] font-sans text-olive-light font-light uppercase">{formatToRoman(countdown.seconds)}</span>
-                </div>
-              </div>
+            {/* Polaroid 2 (Middle-Left substitute) with swan seal */}
+            <div className="w-[90%] self-start transform rotate-2 relative shadow-md">
+              <Polaroid 
+                src={leftPortraitUrl} 
+                alt="Couple overlooking shore" 
+              />
+              <SwanSeal className="absolute -top-5 -right-5 z-20 scale-85" />
             </div>
 
-            {/* Supporting right portrait (Nighttime Couple Image) */}
-            <div className="lg:col-span-3 flex justify-center order-3 select-text">
-              <div className="relative p-2 bg-[#FAF8F5] border border-earth-dark/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.03)] group max-w-[240px] w-full">
-                <div className="relative rounded-xl overflow-hidden aspect-[4/5] bg-stone-100">
-                  <img 
-                    src={rightPortraitUrl} 
-                    alt="Nighttime Couple" 
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl pointer-events-none" />
-                </div>
-              </div>
+            {/* Polaroid 3 (Middle-Right substitute) */}
+            <div className="w-[95%] self-end transform -rotate-2 shadow-md">
+              <Polaroid 
+                src={rightPortraitUrl} 
+                alt="Couple dancing B&W" 
+                landscape 
+              />
             </div>
 
+            {/* Polaroid 4 (Bottom-Middle substitute) */}
+            <div className="w-full transform rotate-1 shadow-md">
+              <Polaroid 
+                src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&q=80&w=600" 
+                alt="Scenic cottage woods path" 
+                landscape 
+              />
+            </div>
+
+            {/* Polaroid 5 (Bottom-Right substitute) with swan seal */}
+            <div className="w-[88%] self-end transform -rotate-1 relative shadow-md">
+              <Polaroid 
+                src={dressCodeImageUrl} 
+                alt="Beautiful bride looking skyward" 
+              />
+              <SwanSeal className="absolute -top-5 -left-5 z-20 scale-85" />
+            </div>
           </div>
         </section>
 
+        {/* Main Content Lookbook wrapper - meticulously padded */}
+        <main className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 lg:pl-32 lg:pr-12 py-12">
 
         {/* SEC II: EVENT DETAILS & MAP */}
         <section 
