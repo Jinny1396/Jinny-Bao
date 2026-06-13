@@ -16,11 +16,13 @@
   --color-petal-pink: #E8DDDB;
 }
 
-h1 {
-  font-family: var(--font-luxurious), cursive !important;
-  font-size: 100px;
-  line-height: 0.8;
-  color: #FFE4E9 !important;
+@layer base {
+  h1 {
+    font-family: var(--font-luxurious), cursive !important;
+    font-size: 100px;
+    line-height: 0.8;
+    color: #FFE4E9 !important;
+  }
 }
 
 body {
