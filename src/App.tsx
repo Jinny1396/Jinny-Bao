@@ -735,6 +735,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<'hero' | 'details' | 'story' | 'dress-code' | 'rsvp'>('hero');
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [heroOpacity, setHeroOpacity] = useState<number>(1);
   const [petals, setPetals] = useState<Petal[]>([]);
   const [rsvpState, setRsvpState] = useState({
     name: '',
@@ -879,9 +880,12 @@ export default function App() {
     }
   }, [isSubmitted]);
 
-  // Interaction Intersection Observer to highlight sidebar Roman numerals automatically
+  // Interaction Intersection Observer and parallax fade for hero text with requestAnimationFrame
   useEffect(() => {
+    let ticking = false;
+
     const handleScroll = () => {
+      // 1. Update Roman numeral highlighters
       const sections = ['hero', 'details', 'story', 'dress-code', 'rsvp'] as const;
       const scrollPos = window.scrollY + 200;
 
@@ -896,10 +900,27 @@ export default function App() {
           }
         }
       }
+
+      // 2. Calculate hero parallax opacity
+      const scrollY = window.scrollY;
+      const fadeEnd = window.innerHeight * 0.5;
+      let opacity = 1 - (scrollY / fadeEnd);
+      if (opacity < 0) opacity = 0;
+      if (opacity > 1) opacity = 1;
+      setHeroOpacity(opacity);
+
+      ticking = false;
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(handleScroll);
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   // RSVP submission function
@@ -2114,7 +2135,10 @@ export default function App() {
         <div className="absolute inset-0 bg-black/15" />
 
         {/* Centered names typography at bottom edge of screen fold */}
-        <div className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]">
+        <div 
+          className="relative z-10 text-center px-4 max-w-4xl select-text animate-[fadeIn_1.5s_ease-out_forwards]"
+          style={{ opacity: heroOpacity }}
+        >
           <h1 className="text-[100px] md:text-[180px] font-luxurious leading-[80px] md:leading-[120px] text-[#FFE4E9] drop-shadow-md select-text">
             {t.weddingName.includes('&') ? (
               <>
