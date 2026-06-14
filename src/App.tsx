@@ -2298,11 +2298,11 @@ export default function App() {
       {/* SECTION 2: THE COMPACT "THE DATE" AREA WITH POLAROID COLLAGE & PARALLAX SCROLL */}
       <section 
         id="the-date" 
-        className="relative w-full py-16 md:py-32 px-4 md:px-12 bg-[#F4F1EE] text-earth-dark/90 flex flex-col items-center justify-start scroll-mt-12 min-h-[155vh] md:min-h-[205vh] overflow-hidden"
+        className="relative w-full py-16 md:py-32 px-4 md:px-12 bg-[#F4F1EE] text-earth-dark/90 flex flex-col items-center justify-start scroll-mt-12 min-h-[145vh] md:min-h-[185vh] overflow-hidden"
       >
         {/* Central Block: Meticulously designed editorial typography, dates, and countdown */}
-        <div className="z-0 md:absolute md:top-[42%] md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 text-center flex flex-col items-center max-w-xl w-full select-all px-4">
-          {/* Symmetrical Dual-Bride/Groom Name Layout in Luxurious Script */}
+        <div className="z-20 md:absolute md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 text-center flex flex-col items-center bg-transparent p-4 max-w-xl w-full border-none shadow-none select-text">
+            {/* Symmetrical Dual-Bride/Groom Name Layout in Luxurious Script */}
             <div className="flex flex-col items-center text-[#2A2A2A] font-serif">
               <div className="flex items-center gap-6 sm:gap-14">
                 {/* Left side couple representation */}
@@ -2413,7 +2413,7 @@ export default function App() {
           <div className="hidden md:block absolute inset-0 w-full h-full pointer-events-none select-none z-1">
             
             {/* Polaroid 1 (Top-Right): Dreamy pathway view */}
-            <ParallaxItem speed={-0.06} className="absolute top-[4%] right-[6%] w-[270px] lg:w-[320px] pointer-events-auto z-5">
+            <ParallaxItem speed={-0.06} className="absolute top-[5%] right-[6%] w-[270px] lg:w-[320px] pointer-events-auto z-5">
               <Polaroid 
                 src="https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&q=80&w=600" 
                 alt="Enchanting wedding pathway forest" 
@@ -2422,7 +2422,7 @@ export default function App() {
             </ParallaxItem>
 
             {/* Polaroid 2 (Middle-Left): Overlooking Water with top-right double-swan seal */}
-            <ParallaxItem speed={0.05} className="absolute top-[20%] left-[5%] w-[230px] lg:w-[275px] pointer-events-auto z-15">
+            <ParallaxItem speed={0.05} className="absolute top-[15%] left-[4%] w-[230px] lg:w-[275px] pointer-events-auto z-15">
               <div className="relative">
                 <Polaroid 
                   src={leftPortraitUrl} 
@@ -2433,7 +2433,7 @@ export default function App() {
             </ParallaxItem>
 
             {/* Polaroid 3 (Middle-Right): B&W couple dance celebrating */}
-            <ParallaxItem speed={-0.03} className="absolute top-[42%] right-[5%] w-[260px] lg:w-[310px] pointer-events-auto z-5">
+            <ParallaxItem speed={-0.03} className="absolute top-[36%] right-[2%] w-[260px] lg:w-[310px] pointer-events-auto z-5">
               <Polaroid 
                 src={rightPortraitUrl} 
                 alt="Aesthetic couple romantic dance" 
@@ -2442,7 +2442,7 @@ export default function App() {
             </ParallaxItem>
 
             {/* Polaroid 4 (Bottom-Middle): Quiet path across tall pines */}
-            <ParallaxItem speed={0.02} className="absolute top-[68%] left-1/2 -translate-x-1/2 w-[280px] lg:w-[340px] pointer-events-auto z-5">
+            <ParallaxItem speed={0.04} className="absolute top-[54%] left-[12%] w-[280px] lg:w-[340px] pointer-events-auto z-5">
               <Polaroid 
                 src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&q=80&w=600" 
                 alt="Forest pathways of mountain gorge" 
@@ -2451,7 +2451,7 @@ export default function App() {
             </ParallaxItem>
 
             {/* Polaroid 5 (Bottom-Right): Gracious bride holding bouquet with top-left double-swan seal */}
-            <ParallaxItem speed={-0.04} className="absolute top-[78%] right-[8%] w-[220px] lg:w-[265px] pointer-events-auto z-15">
+            <ParallaxItem speed={-0.04} className="absolute top-[65%] right-[8%] w-[220px] lg:w-[265px] pointer-events-auto z-15">
               <div className="relative">
                 <Polaroid 
                   src={dressCodeImageUrl} 
